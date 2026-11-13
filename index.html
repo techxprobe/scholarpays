@@ -1,0 +1,3163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScholarPay · Secure School Fee & Receipt Operations</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    }
+    body {
+      background-color: #f5f7fb;
+      color: #0f172a;
+      min-width: 320px;
+    }
+    .tabular-nums {
+      font-variant-numeric: tabular-nums;
+    }
+    /* Formal Times New Roman Receipt Typography */
+    .receipt-serif {
+      font-family: 'Times New Roman', Times, Georgia, serif;
+    }
+    .receipt-sans {
+      font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    }
+    .receipt-sheet {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 10mm;
+      }
+      body {
+        background: #ffffff !important;
+      }
+      body * {
+        visibility: hidden !important;
+      }
+      #receipt-print-area,
+      #receipt-print-area * {
+        visibility: visible !important;
+      }
+      #receipt-modal-backdrop {
+        position: static !important;
+        display: block !important;
+        background: transparent !important;
+        padding: 0 !important;
+        overflow: visible !important;
+      }
+      #receipt-print-area {
+        position: absolute !important;
+        inset: 0 auto auto 0 !important;
+        width: 100% !important;
+        max-width: none !important;
+        border: 0 !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-[#f5f7fb] text-slate-900">
+  <!-- Toast Container -->
+  <div id="toast-container" aria-live="polite" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0 no-print"></div>
+
+  <!-- Top Header -->
+  <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur no-print">
+    <div class="mx-auto flex min-h-[72px] max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-8">
+      <div class="flex min-w-0 items-center gap-3">
+        <div class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-700 text-white shadow-sm font-extrabold text-sm">
+          SP
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <p class="font-extrabold tracking-tight text-slate-950 text-base">ScholarPay</p>
+            <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold text-emerald-800 ring-1 ring-inset ring-emerald-200">Pro Edition</span>
+          </div>
+          <p class="hidden truncate text-xs text-slate-500 sm:block">Auditable school fee & receipt operations</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div>
+          <label class="sr-only" for="school-selector">Active school</label>
+          <select id="school-selector" class="rounded-xl border border-slate-200 bg-slate-50 py-2 pl-3 pr-8 text-xs sm:text-sm font-semibold text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100"></select>
+        </div>
+
+        <div>
+          <label class="sr-only" for="role-selector">Simulated role</label>
+          <select id="role-selector" title="Switch active role to test permissions" class="rounded-xl border border-indigo-200 bg-indigo-50/70 py-2 pl-3 pr-8 text-xs font-bold text-indigo-900 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100">
+            <option value="admin">Role: Platform Owner</option>
+            <option value="school_admin">Role: School Admin</option>
+            <option value="collector">Role: Fee Collector</option>
+            <option value="viewer">Role: Read-Only Viewer</option>
+          </select>
+        </div>
+
+        <button id="btn-reset-demo" type="button" title="Reset sample data to clean defaults" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900">
+          Reset Data
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace Grid -->
+  <div class="mx-auto grid max-w-[1600px] lg:grid-cols-[240px_minmax(0,1fr)] no-print">
+    <!-- Sidebar Navigation -->
+    <aside class="border-b border-slate-200 bg-white px-3 py-3 lg:min-h-[calc(100vh-72px)] lg:border-b-0 lg:border-r lg:px-4 lg:py-6">
+      <nav id="main-nav" aria-label="Main navigation" class="flex gap-1 overflow-x-auto lg:flex-col lg:gap-1.5"></nav>
+
+      <div class="mt-6 hidden rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4 lg:block">
+        <div class="flex items-center gap-2 text-indigo-800">
+          <span class="text-xs font-bold uppercase tracking-wide">Verified Capabilities</span>
+        </div>
+        <ul class="mt-2 space-y-1.5 text-[11px] leading-relaxed text-slate-600">
+          <li>• Smooth multi-digit fee & late-fee typing</li>
+          <li>• Custom school logo upload & crest print</li>
+          <li>• Times New Roman formal receipt layout</li>
+          <li>• Installment add, edit & delete controls</li>
+          <li>• Single or Dual-Copy A4 receipt print</li>
+        </ul>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="min-w-0 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+      <div id="locked-banner" class="hidden mb-5 rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-950 shadow-sm" role="status"></div>
+      <div id="view-container"></div>
+    </main>
+  </div>
+
+  <!-- Accessible Action / Reason Modal -->
+  <div id="action-modal-backdrop" class="fixed inset-0 z-50 hidden place-items-center overflow-y-auto bg-slate-950/50 p-4 no-print" role="dialog" aria-modal="true" aria-labelledby="action-modal-title">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-3">
+        <h2 id="action-modal-title" class="text-lg font-extrabold text-slate-950">Confirm Action</h2>
+        <button id="action-modal-close" type="button" aria-label="Close modal" class="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50">✕</button>
+      </div>
+      <p id="action-modal-desc" class="mt-2 text-sm leading-6 text-slate-600"></p>
+      <form id="action-modal-form" class="mt-4">
+        <div id="action-modal-reason-wrap" class="hidden">
+          <label id="action-modal-reason-label" for="action-modal-reason" class="mb-1.5 block text-xs font-semibold text-slate-700">Reason (minimum 5 characters) *</label>
+          <textarea id="action-modal-reason" rows="3" maxlength="500" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100" placeholder="Enter a clear audit reason (at least 5 characters)…"></textarea>
+          <p id="action-modal-error" role="alert" class="mt-1 hidden text-xs font-semibold text-rose-700">Please enter a reason of at least 5 characters.</p>
+        </div>
+        <div class="mt-5 flex justify-end gap-2">
+          <button id="action-modal-cancel" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button id="action-modal-submit" type="submit" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800">Confirm</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Printable Receipt Modal -->
+  <div id="receipt-modal-backdrop" class="fixed inset-0 z-50 hidden place-items-center overflow-y-auto bg-slate-950/60 p-3 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="receipt-modal-heading">
+    <section id="receipt-print-area" class="w-full max-w-3xl rounded-2xl bg-white shadow-2xl overflow-hidden"></section>
+  </div>
+
+  <!-- Edit Scholar Modal -->
+  <div id="edit-scholar-backdrop" class="fixed inset-0 z-50 hidden place-items-center overflow-y-auto bg-slate-950/50 p-4 no-print" role="dialog" aria-modal="true" aria-labelledby="edit-scholar-title">
+    <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider text-indigo-700">Update Record</p>
+          <h2 id="edit-scholar-title" class="mt-0.5 text-lg font-extrabold text-slate-950">Edit Scholar Details</h2>
+        </div>
+        <button id="edit-scholar-close" type="button" aria-label="Close edit scholar dialog" class="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50">✕</button>
+      </div>
+      <form id="edit-scholar-form" class="mt-4 grid gap-3 sm:grid-cols-2">
+        <input type="hidden" id="edit-scholar-id" />
+        <div>
+          <label for="edit-student-code" class="mb-1 block text-xs font-semibold text-slate-700">Admission / Student Code *</label>
+          <input id="edit-student-code" required class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label for="edit-full-name" class="mb-1 block text-xs font-semibold text-slate-700">Scholar Full Name *</label>
+          <input id="edit-full-name" required minlength="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label for="edit-grade" class="mb-1 block text-xs font-semibold text-slate-700">Class / Grade *</label>
+          <input id="edit-grade" required class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label for="edit-roll" class="mb-1 block text-xs font-semibold text-slate-700">Roll Number</label>
+          <input id="edit-roll" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label for="edit-guardian" class="mb-1 block text-xs font-semibold text-slate-700">Parent / Guardian *</label>
+          <input id="edit-guardian" required minlength="2" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label for="edit-phone" class="mb-1 block text-xs font-semibold text-slate-700">Phone *</label>
+          <input id="edit-phone" required minlength="6" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div class="sm:col-span-2">
+          <label for="edit-email" class="mb-1 block text-xs font-semibold text-slate-700">Email</label>
+          <input id="edit-email" type="email" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div class="sm:col-span-2 mt-2 flex justify-end gap-2">
+          <button id="edit-scholar-cancel" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add / Edit Installment Modal -->
+  <div id="inst-modal-backdrop" class="fixed inset-0 z-50 hidden place-items-center overflow-y-auto bg-slate-950/50 p-4 no-print" role="dialog" aria-modal="true" aria-labelledby="inst-modal-title">
+    <div class="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <p class="text-xs font-bold uppercase tracking-wider text-indigo-700">Installment Schedule</p>
+          <h2 id="inst-modal-title" class="mt-0.5 text-lg font-extrabold text-slate-950">Add Custom Installment</h2>
+        </div>
+        <button id="inst-modal-close" type="button" aria-label="Close installment dialog" class="grid h-8 w-8 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50">✕</button>
+      </div>
+      <form id="inst-modal-form" class="mt-4 space-y-3">
+        <input type="hidden" id="inst-modal-id" />
+        <div>
+          <label for="inst-modal-label" class="mb-1 block text-xs font-semibold text-slate-700">Installment Label / Particulars *</label>
+          <input id="inst-modal-label" required placeholder="e.g. Exam Fee · Term 1 or May 2026" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label for="inst-modal-due" class="mb-1 block text-xs font-semibold text-slate-700">Due Date *</label>
+          <input id="inst-modal-due" type="date" required class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label for="inst-modal-amount" class="mb-1 block text-xs font-semibold text-slate-700">Installment Amount (₹) *</label>
+          <input id="inst-modal-amount" type="number" min="1" step="1" required placeholder="e.g. 1500" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm tabular-nums" />
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <button id="inst-modal-cancel" type="button" class="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button type="submit" class="rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800">Save Installment</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // Built-In High-Resolution School Crest SVG Data URIs
+    // =========================================================================
+    function createSchoolCrestDataUrl(monogram = "BIS", primaryHex = "#1e1b4b", goldHex = "#d97706") {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160">
+        <defs>
+          <linearGradient id="shieldGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="${primaryHex}" />
+            <stop offset="100%" stop-color="#312e81" />
+          </linearGradient>
+        </defs>
+        <circle cx="80" cy="80" r="74" fill="#ffffff" stroke="${primaryHex}" stroke-width="4"/>
+        <circle cx="80" cy="80" r="66" fill="none" stroke="${goldHex}" stroke-width="2" stroke-dasharray="4 3"/>
+        <path d="M80 22 L126 40 L126 82 C126 114 104 134 80 144 C56 134 34 114 34 82 L34 40 Z" fill="url(#shieldGrad)" stroke="${goldHex}" stroke-width="3"/>
+        <path d="M58 60 L80 52 L102 60 L102 78 L80 70 L58 78 Z" fill="#fef3c7" opacity="0.95"/>
+        <line x1="80" y1="52" x2="80" y2="70" stroke="${primaryHex}" stroke-width="2"/>
+        <text x="80" y="112" text-anchor="middle" font-family="'Times New Roman', Times, serif" font-size="24" font-weight="bold" fill="#ffffff" letter-spacing="2">${monogram}</text>
+        <polygon points="80,29 83,36 90,36 84,40 86,47 80,43 74,47 76,40 70,36 77,36" fill="#fbbf24"/>
+      </svg>`;
+      return "data:image/svg+xml;utf8," + encodeURIComponent(svg);
+    }
+
+    const DEFAULT_BLESS_LOGO = createSchoolCrestDataUrl("BIS", "#1e1b4b", "#d97706");
+    const DEFAULT_CRESCENT_LOGO = createSchoolCrestDataUrl("CPA", "#064e3b", "#059669");
+
+    // =========================================================================
+    // Helper Functions & Indian Number-to-Words Converter
+    // =========================================================================
+    const STORAGE_KEY = "scholarpay_standalone_v3";
+    const MONTH_NAMES = ["April", "May", "June", "July", "August", "September", "October", "November", "December", "January", "February", "March"];
+    const ACCENT_THEMES = {
+      indigo: {
+        border: "border-indigo-900",
+        bg: "bg-indigo-950",
+        lightBg: "bg-indigo-50",
+        text: "text-indigo-950",
+        badge: "bg-indigo-900 text-white"
+      },
+      emerald: {
+        border: "border-emerald-900",
+        bg: "bg-emerald-950",
+        lightBg: "bg-emerald-50",
+        text: "text-emerald-950",
+        badge: "bg-emerald-900 text-white"
+      },
+      teal: {
+        border: "border-teal-900",
+        bg: "bg-teal-950",
+        lightBg: "bg-teal-50",
+        text: "text-teal-950",
+        badge: "bg-teal-900 text-white"
+      },
+      amber: {
+        border: "border-amber-800",
+        bg: "bg-amber-950",
+        lightBg: "bg-amber-50",
+        text: "text-amber-950",
+        badge: "bg-amber-800 text-white"
+      },
+      rose: {
+        border: "border-rose-900",
+        bg: "bg-rose-950",
+        lightBg: "bg-rose-50",
+        text: "text-rose-950",
+        badge: "bg-rose-900 text-white"
+      }
+    };
+
+    function money(value) {
+      return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(value) || 0);
+    }
+
+    function numberToIndianWords(num) {
+      const n = Math.round(Number(num) || 0);
+      if (n <= 0) return "Zero Rupees Only";
+      const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+      const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+      function twoDigits(val) {
+        if (val < 20) return ones[val];
+        const t = Math.floor(val / 10);
+        const o = val % 10;
+        return tens[t] + (o ? " " + ones[o] : "");
+      }
+      function threeDigits(val) {
+        const h = Math.floor(val / 100);
+        const rem = val % 100;
+        return (h ? ones[h] + " Hundred" + (rem ? " " : "") : "") + (rem ? twoDigits(rem) : "");
+      }
+      let rem = n;
+      const parts = [];
+      const crore = Math.floor(rem / 10000000);
+      rem %= 10000000;
+      const lakh = Math.floor(rem / 100000);
+      rem %= 100000;
+      const thousand = Math.floor(rem / 1000);
+      rem %= 1000;
+      if (crore > 0) parts.push(threeDigits(crore) + " Crore");
+      if (lakh > 0) parts.push(twoDigits(lakh) + " Lakh");
+      if (thousand > 0) parts.push(twoDigits(thousand) + " Thousand");
+      if (rem > 0) parts.push(threeDigits(rem));
+      return "Rupees " + parts.join(" ") + " Only";
+    }
+
+    function todayIsoIst() {
+      try {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit"
+        }).formatToParts(new Date());
+        const y = parts.find(p => p.type === "year")?.value;
+        const m = parts.find(p => p.type === "month")?.value;
+        const d = parts.find(p => p.type === "day")?.value;
+        if (y && m && d) return `${y}-${m}-${d}`;
+      } catch (e) {}
+      return new Date().toISOString().slice(0, 10);
+    }
+
+    function currentAcademicYear() {
+      const [yStr, mStr] = todayIsoIst().split("-");
+      const y = Number(yStr);
+      const m = Number(mStr);
+      const start = m >= 4 ? y : y - 1;
+      return `${start}-${String((start + 1) % 100).padStart(2, "0")}`;
+    }
+
+    function isValidAcademicYear(val) {
+      const match = /^(\d{4})-(\d{2})$/.exec(String(val || "").trim());
+      if (!match) return false;
+      const start = Number(match[1]);
+      const suffix = Number(match[2]);
+      return start >= 2000 && start <= 2100 && suffix === (start + 1) % 100;
+    }
+
+    function shortDate(value) {
+      return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value));
+    }
+
+    function longDate(value) {
+      return new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+    }
+
+    function escapeHtml(raw) {
+      return String(raw ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function csvCell(raw) {
+      let value = String(raw ?? "");
+      if (/^[\s]*[=+\-@]/.test(value)) value = `'${value}`;
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+
+    function calculateAnnualFees(tuition, otherFees, scholarshipPct) {
+      if (!Number.isSafeInteger(tuition) || tuition <= 0 || !Number.isSafeInteger(otherFees) || otherFees < 0) {
+        throw new Error("Tuition must be a positive whole rupee amount and other fees cannot be negative.");
+      }
+      if (!Number.isInteger(scholarshipPct) || scholarshipPct < 0 || scholarshipPct > 100) {
+        throw new Error("Scholarship percentage must be an integer between 0 and 100.");
+      }
+      const gross = tuition + otherFees;
+      const discount = Math.round((gross * scholarshipPct) / 100);
+      const net = gross - discount;
+      if (net <= 0) throw new Error("Net annual fees must be greater than zero.");
+      return { gross, discount, net };
+    }
+
+    function splitInstallments(netAnnual, count) {
+      const base = Math.floor(netAnnual / count);
+      const rem = netAnnual % count;
+      return Array.from({ length: count }, (_, idx) => base + (idx < rem ? 1 : 0));
+    }
+
+    function makeId(prefix) {
+      const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+      return `${prefix}-${rand}`;
+    }
+
+    function showToast(message, tone = "success") {
+      const container = document.getElementById("toast-container");
+      if (!container) return;
+      const item = document.createElement("div");
+      const toneClass = tone === "error"
+        ? "border-rose-300 bg-rose-950 text-white"
+        : "border-slate-800 bg-slate-900 text-white";
+      item.className = `pointer-events-auto flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs font-semibold shadow-lg transition ${toneClass}`;
+      item.innerHTML = `<span>${escapeHtml(message)}</span>`;
+      container.appendChild(item);
+      window.setTimeout(() => {
+        item.remove();
+      }, 3600);
+    }
+
+    function syncScholarNetAnnual(scholarId) {
+      const scholar = state.scholars.find(s => s.scholarId === scholarId);
+      if (!scholar) return;
+      const insts = state.installments.filter(i => i.scholarId === scholarId);
+      const sum = insts.reduce((acc, item) => acc + item.amount, 0);
+      scholar.netAnnual = sum;
+      scholar.installmentCount = insts.length;
+    }
+
+    // =========================================================================
+    // Default Seed Data
+    // =========================================================================
+    function buildInitialState() {
+      const school1Id = "SCH-BLESS01";
+      const school2Id = "SCH-CRESCENT02";
+      const scholar1Id = "SP-AARAV01";
+      const scholar2Id = "SP-ZOYA02";
+
+      const s1Splits = splitInstallments(16200, 12);
+      const s1Installments = s1Splits.map((amt, idx) => {
+        const monthIndex = (3 + idx) % 12;
+        const year = monthIndex < 3 ? 2027 : 2026;
+        const month = String(monthIndex + 1).padStart(2, "0");
+        return {
+          installmentId: `INS-S1-${idx + 1}`,
+          schoolId: school1Id,
+          scholarId: scholar1Id,
+          sequence: idx + 1,
+          label: `${MONTH_NAMES[idx]} ${year}`,
+          dueDate: `${year}-${month}-10`,
+          amount: amt,
+          paidAmount: idx < 2 ? amt : 0
+        };
+      });
+
+      const s2Splits = splitInstallments(24000, 4);
+      const s2Months = [0, 3, 6, 9];
+      const s2Installments = s2Splits.map((amt, idx) => {
+        const mOff = s2Months[idx];
+        const monthIndex = (3 + mOff) % 12;
+        const year = monthIndex < 3 ? 2027 : 2026;
+        const month = String(monthIndex + 1).padStart(2, "0");
+        return {
+          installmentId: `INS-S2-${idx + 1}`,
+          schoolId: school1Id,
+          scholarId: scholar2Id,
+          sequence: idx + 1,
+          label: `Installment ${idx + 1} · ${MONTH_NAMES[mOff]} ${year}`,
+          dueDate: `${year}-${month}-10`,
+          amount: amt,
+          paidAmount: idx === 0 ? 4000 : 0
+        };
+      });
+
+      return {
+        currentRole: "admin",
+        activeSchoolId: school1Id,
+        activeTab: "overview",
+        scholarSearch: "",
+        showScholarForm: false,
+        collectScholarId: scholar1Id,
+        collectSelected: {},
+        collectLateFee: 0,
+        collectMethod: "upi_manual",
+        collectReference: "",
+        collectNote: "",
+        collectAutoConfirm: true,
+        receiptSearch: "",
+        receiptDualCopy: false,
+        schools: [
+          {
+            schoolId: school1Id,
+            name: "Bless International School",
+            principal: "Aquib Jawed",
+            phone: "6206752354",
+            email: "isyedaquib07@gmail.com",
+            planName: "Institutional Pro",
+            subscriptionDue: 0,
+            status: "active",
+            lockReason: null,
+            academicYear: "2026-27",
+            receiptDesign: {
+              title: "BLESS INTERNATIONAL SCHOOL",
+              tagline: "Where Education Meets Excellence",
+              address: "Chishti Nagar, Makhar, Nawada – 805112, Bihar · Mob: 7070093786",
+              prefix: "BIS-",
+              signatory: "Aquib Jawed · Authorized Signatory",
+              footer: "Keep this receipt for your records. Instagram: @bless.international.school",
+              accent: "indigo",
+              fontFamily: "times",
+              logoUrl: DEFAULT_BLESS_LOGO,
+              logoSize: "72",
+              showWatermark: true
+            }
+          },
+          {
+            schoolId: school2Id,
+            name: "Crescent Public Academy",
+            principal: "R. K. Verma",
+            phone: "9835011223",
+            email: "office@crescentacademy.edu.in",
+            planName: "Standard",
+            subscriptionDue: 4500,
+            status: "locked",
+            lockReason: "Kindly contact to the owner — subscription renewal overdue.",
+            academicYear: "2026-27",
+            receiptDesign: {
+              title: "CRESCENT PUBLIC ACADEMY",
+              tagline: "Official School Fee Receipt",
+              address: "Civil Lines, Gaya, Bihar",
+              prefix: "CPA-",
+              signatory: "Principal / Cashier",
+              footer: "Fees once paid are non-refundable.",
+              accent: "emerald",
+              fontFamily: "times",
+              logoUrl: DEFAULT_CRESCENT_LOGO,
+              logoSize: "68",
+              showWatermark: true
+            }
+          }
+        ],
+        members: [
+          { userId: 101, schoolId: school1Id, name: "Aquib Jawed", email: "isyedaquib07@gmail.com", role: "school_admin" },
+          { userId: 102, schoolId: school1Id, name: "Kashif Raza", email: "kashif@blessschool.in", role: "collector" },
+          { userId: 103, schoolId: school1Id, name: "Fiza Khan", email: "fiza@blessschool.in", role: "viewer" }
+        ],
+        scholars: [
+          {
+            scholarId: scholar1Id,
+            schoolId: school1Id,
+            studentCode: "BIS-26-101",
+            fullName: "Aarav Sharma",
+            grade: "Class 10 · Section A",
+            rollNumber: "14",
+            guardianName: "Rajesh Sharma",
+            phone: "9431088776",
+            email: "rajesh.sharma@example.com",
+            tuitionFee: 16000,
+            otherFee: 2000,
+            scholarshipPct: 10,
+            grossAnnual: 18000,
+            discountAmount: 1800,
+            netAnnual: 16200,
+            installmentCount: 12,
+            dueDay: 10,
+            academicYear: "2026-27"
+          },
+          {
+            scholarId: scholar2Id,
+            schoolId: school1Id,
+            studentCode: "BIS-26-102",
+            fullName: "Zoya Parveen",
+            grade: "Class 8 · Section B",
+            rollNumber: "07",
+            guardianName: "Md. Tariq",
+            phone: "9934266551",
+            email: "tariq@example.com",
+            tuitionFee: 22000,
+            otherFee: 2000,
+            scholarshipPct: 0,
+            grossAnnual: 24000,
+            discountAmount: 0,
+            netAnnual: 24000,
+            installmentCount: 4,
+            dueDay: 10,
+            academicYear: "2026-27"
+          }
+        ],
+        installments: [...s1Installments, ...s2Installments],
+        payments: [
+          {
+            paymentId: "PAY-CONF01",
+            schoolId: school1Id,
+            scholarId: scholar1Id,
+            scholarName: "Aarav Sharma",
+            studentCode: "BIS-26-101",
+            amount: 2700,
+            lateFee: 0,
+            method: "upi_manual",
+            reference: "UTR412598741256",
+            note: "April and May tuition paid via UPI QR",
+            status: "manual_confirmed",
+            recordedByName: "Kashif Raza",
+            createdAt: "2026-04-10T09:15:00.000Z",
+            confirmedAt: "2026-04-10T10:05:00.000Z"
+          },
+          {
+            paymentId: "PAY-CONF02",
+            schoolId: school1Id,
+            scholarId: scholar2Id,
+            scholarName: "Zoya Parveen",
+            studentCode: "BIS-26-102",
+            amount: 4000,
+            lateFee: 0,
+            method: "cash",
+            reference: "CASH-SLIP-19",
+            note: "Partial payment for Q1 installment",
+            status: "manual_confirmed",
+            recordedByName: "Aquib Jawed",
+            createdAt: "2026-04-14T11:20:00.000Z",
+            confirmedAt: "2026-04-14T11:25:00.000Z"
+          },
+          {
+            paymentId: "PAY-PEND03",
+            schoolId: school1Id,
+            scholarId: scholar1Id,
+            scholarName: "Aarav Sharma",
+            studentCode: "BIS-26-101",
+            amount: 1350,
+            lateFee: 0,
+            method: "bank_transfer",
+            reference: "NEFT-8829104",
+            note: "June installment awaiting admin confirmation",
+            status: "pending_manual",
+            recordedByName: "Kashif Raza",
+            createdAt: "2026-11-12T08:40:00.000Z",
+            confirmedAt: null
+          }
+        ],
+        allocations: [
+          { id: 1, paymentId: "PAY-CONF01", installmentId: "INS-S1-1", amount: 1350 },
+          { id: 2, paymentId: "PAY-CONF01", installmentId: "INS-S1-2", amount: 1350 },
+          { id: 3, paymentId: "PAY-CONF02", installmentId: "INS-S2-1", amount: 4000 },
+          { id: 4, paymentId: "PAY-PEND03", installmentId: "INS-S1-3", amount: 1350 }
+        ],
+        receipts: [
+          {
+            receiptId: "BIS-20260410-AA11BB",
+            paymentId: "PAY-CONF01",
+            schoolId: school1Id,
+            scholarId: scholar1Id,
+            receiptDate: "2026-04-10T10:05:00.000Z"
+          },
+          {
+            receiptId: "BIS-20260414-CC22DD",
+            paymentId: "PAY-CONF02",
+            schoolId: school1Id,
+            scholarId: scholar2Id,
+            receiptDate: "2026-04-14T11:25:00.000Z"
+          }
+        ],
+        auditEvents: [
+          {
+            id: 1,
+            schoolId: school1Id,
+            actorName: "Aquib Jawed",
+            action: "school.created",
+            entityType: "school",
+            entityId: school1Id,
+            details: '{"name":"Bless International School"}',
+            createdAt: "2026-04-01T08:00:00.000Z"
+          },
+          {
+            id: 2,
+            schoolId: school1Id,
+            actorName: "Aquib Jawed",
+            action: "payment.manual_confirmed",
+            entityType: "payment",
+            entityId: "PAY-CONF01",
+            details: '{"receiptId":"BIS-20260410-AA11BB","total":2700,"reference":"UTR412598741256"}',
+            createdAt: "2026-04-10T10:05:00.000Z"
+          },
+          {
+            id: 3,
+            schoolId: school1Id,
+            actorName: "Aquib Jawed",
+            action: "payment.manual_confirmed",
+            entityType: "payment",
+            entityId: "PAY-CONF02",
+            details: '{"receiptId":"BIS-20260414-CC22DD","total":4000,"reference":"CASH-SLIP-19"}',
+            createdAt: "2026-04-14T11:25:00.000Z"
+          }
+        ]
+      };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.schools)) {
+            parsed.schools.forEach(s => {
+              if (!s.receiptDesign) s.receiptDesign = {};
+              if (!s.receiptDesign.fontFamily) s.receiptDesign.fontFamily = "times";
+              if (!s.receiptDesign.logoSize) s.receiptDesign.logoSize = "72";
+              if (s.receiptDesign.showWatermark === undefined) s.receiptDesign.showWatermark = true;
+              if (s.receiptDesign.logoUrl === undefined) {
+                s.receiptDesign.logoUrl = s.schoolId === "SCH-BLESS01" ? DEFAULT_BLESS_LOGO : DEFAULT_CRESCENT_LOGO;
+              }
+            });
+            return parsed;
+          }
+        }
+      } catch (e) {}
+      return buildInitialState();
+    }
+
+    let state = loadState();
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {}
+    }
+
+    function getActiveSchool() {
+      return state.schools.find(s => s.schoolId === state.activeSchoolId) || state.schools[0];
+    }
+
+    function isOwner() {
+      return state.currentRole === "admin";
+    }
+
+    function isSchoolAdmin() {
+      return state.currentRole === "admin" || state.currentRole === "school_admin";
+    }
+
+    function canWrite() {
+      const school = getActiveSchool();
+      if (!school || school.status === "locked") return false;
+      return state.currentRole === "admin" || state.currentRole === "school_admin" || state.currentRole === "collector";
+    }
+
+    function logAudit(schoolId, action, entityType, entityId, detailsObj) {
+      const roleLabels = {
+        admin: "Aquib Jawed (Owner)",
+        school_admin: "Aquib Jawed (School Admin)",
+        collector: "Kashif Raza (Collector)",
+        viewer: "Fiza Khan (Viewer)"
+      };
+      state.auditEvents.unshift({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        schoolId,
+        actorName: roleLabels[state.currentRole] || "Authorized Staff",
+        action,
+        entityType,
+        entityId,
+        details: JSON.stringify(detailsObj || {}),
+        createdAt: new Date().toISOString()
+      });
+    }
+
+    // =========================================================================
+    // Accessible Action Modal Controller
+    // =========================================================================
+    let modalCallback = null;
+    let modalRequiresReason = false;
+
+    function openActionModal({ title, description, confirmLabel, confirmTone = "indigo", requireReason = false, reasonLabel = "Reason (minimum 5 characters) *", onConfirm }) {
+      modalCallback = onConfirm;
+      modalRequiresReason = requireReason;
+      const backdrop = document.getElementById("action-modal-backdrop");
+      const titleEl = document.getElementById("action-modal-title");
+      const descEl = document.getElementById("action-modal-desc");
+      const reasonWrap = document.getElementById("action-modal-reason-wrap");
+      const reasonLabelEl = document.getElementById("action-modal-reason-label");
+      const reasonInput = document.getElementById("action-modal-reason");
+      const errorEl = document.getElementById("action-modal-error");
+      const submitBtn = document.getElementById("action-modal-submit");
+
+      titleEl.textContent = title;
+      descEl.textContent = description;
+      reasonLabelEl.textContent = reasonLabel;
+      reasonInput.value = "";
+      errorEl.classList.add("hidden");
+
+      if (requireReason) {
+        reasonWrap.classList.remove("hidden");
+      } else {
+        reasonWrap.classList.add("hidden");
+      }
+
+      const toneClasses = {
+        indigo: "rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800",
+        emerald: "rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white hover:bg-emerald-800",
+        rose: "rounded-xl bg-rose-700 px-4 py-2 text-xs font-bold text-white hover:bg-rose-800"
+      };
+      submitBtn.className = toneClasses[confirmTone] || toneClasses.indigo;
+      submitBtn.textContent = confirmLabel;
+
+      backdrop.classList.remove("hidden");
+      backdrop.classList.add("grid");
+      window.setTimeout(() => {
+        if (requireReason) reasonInput.focus();
+        else submitBtn.focus();
+      }, 20);
+    }
+
+    function closeActionModal() {
+      const backdrop = document.getElementById("action-modal-backdrop");
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("grid");
+      modalCallback = null;
+    }
+
+    document.getElementById("action-modal-close").addEventListener("click", closeActionModal);
+    document.getElementById("action-modal-cancel").addEventListener("click", closeActionModal);
+    document.getElementById("action-modal-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      const reasonInput = document.getElementById("action-modal-reason");
+      const errorEl = document.getElementById("action-modal-error");
+      const reason = reasonInput.value.trim();
+      if (modalRequiresReason && reason.length < 5) {
+        errorEl.classList.remove("hidden");
+        reasonInput.focus();
+        return;
+      }
+      const cb = modalCallback;
+      closeActionModal();
+      if (cb) cb(reason);
+    });
+
+    // =========================================================================
+    // Add / Edit Installment Modal Controller
+    // =========================================================================
+    function openInstallmentModal(installmentId = null) {
+      const school = getActiveSchool();
+      const scholar = state.scholars.find(s => s.scholarId === state.collectScholarId && s.schoolId === school.schoolId);
+      if (!scholar) return;
+
+      const titleEl = document.getElementById("inst-modal-title");
+      const idInput = document.getElementById("inst-modal-id");
+      const labelInput = document.getElementById("inst-modal-label");
+      const dueInput = document.getElementById("inst-modal-due");
+      const amtInput = document.getElementById("inst-modal-amount");
+
+      if (installmentId) {
+        const inst = state.installments.find(i => i.installmentId === installmentId);
+        if (!inst) return;
+        titleEl.textContent = `Edit Installment (${inst.label})`;
+        idInput.value = inst.installmentId;
+        labelInput.value = inst.label;
+        dueInput.value = inst.dueDate;
+        amtInput.value = String(inst.amount);
+        amtInput.min = String(Math.max(1, inst.paidAmount));
+      } else {
+        titleEl.textContent = `Add Installment for ${scholar.fullName}`;
+        idInput.value = "";
+        labelInput.value = "";
+        dueInput.value = todayIsoIst();
+        amtInput.value = "1500";
+        amtInput.min = "1";
+      }
+
+      const backdrop = document.getElementById("inst-modal-backdrop");
+      backdrop.classList.remove("hidden");
+      backdrop.classList.add("grid");
+      window.setTimeout(() => labelInput.focus(), 20);
+    }
+
+    function closeInstallmentModal() {
+      const backdrop = document.getElementById("inst-modal-backdrop");
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("grid");
+    }
+
+    document.getElementById("inst-modal-close").addEventListener("click", closeInstallmentModal);
+    document.getElementById("inst-modal-cancel").addEventListener("click", closeInstallmentModal);
+    document.getElementById("inst-modal-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      if (!canWrite()) return;
+      const school = getActiveSchool();
+      const scholarId = state.collectScholarId;
+      const existingId = document.getElementById("inst-modal-id").value;
+      const label = document.getElementById("inst-modal-label").value.trim();
+      const dueDate = document.getElementById("inst-modal-due").value;
+      const amount = Math.round(Number(document.getElementById("inst-modal-amount").value));
+
+      if (!label || !dueDate || !Number.isSafeInteger(amount) || amount <= 0) {
+        showToast("Please enter a valid label, date, and positive integer rupee amount.", "error");
+        return;
+      }
+
+      if (existingId) {
+        const inst = state.installments.find(i => i.installmentId === existingId);
+        if (!inst) return;
+        if (amount < inst.paidAmount) {
+          showToast(`Amount cannot be less than already confirmed paid amount (${money(inst.paidAmount)}).`, "error");
+          return;
+        }
+        inst.label = label;
+        inst.dueDate = dueDate;
+        inst.amount = amount;
+        syncScholarNetAnnual(scholarId);
+        logAudit(school.schoolId, "installment.updated", "installment", existingId, { label, dueDate, amount });
+        showToast(`Updated installment ${label}.`);
+      } else {
+        const currentInsts = state.installments.filter(i => i.scholarId === scholarId);
+        const nextSeq = currentInsts.reduce((max, i) => Math.max(max, i.sequence || 0), 0) + 1;
+        const newInstId = makeId("INS");
+        state.installments.push({
+          installmentId: newInstId,
+          schoolId: school.schoolId,
+          scholarId,
+          sequence: nextSeq,
+          label,
+          dueDate,
+          amount,
+          paidAmount: 0
+        });
+        syncScholarNetAnnual(scholarId);
+        logAudit(school.schoolId, "installment.created", "installment", newInstId, { scholarId, label, dueDate, amount });
+        showToast(`Added installment ${label} (${money(amount)}).`);
+      }
+
+      saveState();
+      closeInstallmentModal();
+      renderApp();
+    });
+
+    // =========================================================================
+    // Professional Times New Roman Receipt Builder & Modal
+    // =========================================================================
+    function computeHistoricalPaidMap(schoolId, targetPaymentId, cutoffIso) {
+      const map = {};
+      const validPayments = state.payments.filter(p =>
+        p.schoolId === schoolId &&
+        (p.status === "manual_confirmed" || p.status === "provider_verified") &&
+        (p.paymentId === targetPaymentId || (p.confirmedAt && p.confirmedAt <= cutoffIso))
+      );
+      const validIds = new Set(validPayments.map(p => p.paymentId));
+      for (const alloc of state.allocations) {
+        if (validIds.has(alloc.paymentId)) {
+          map[alloc.installmentId] = (map[alloc.installmentId] || 0) + alloc.amount;
+        }
+      }
+      return map;
+    }
+
+    function buildFormalReceiptCopyHtml({
+      copyLabel,
+      school,
+      design,
+      receiptId,
+      receiptDate,
+      scholar,
+      payment,
+      paymentAllocs,
+      annualNetFee,
+      totalPaidTillDate
+    }) {
+      const theme = ACCENT_THEMES[design.accent] || ACCENT_THEMES.indigo;
+      const fontClass = design.fontFamily === "sans" ? "receipt-sans" : "receipt-serif";
+      const logoSizePx = Number(design.logoSize) || 72;
+      const hasLogo = Boolean(design.logoUrl && design.logoUrl.trim());
+      const remainingAnnual = Math.max(0, annualNetFee - totalPaidTillDate);
+
+      return `
+        <div class="receipt-sheet ${fontClass} relative overflow-hidden rounded-lg border-2 border-slate-900 bg-white p-1.5 text-slate-950">
+          <div class="relative border ${theme.border} p-4 sm:p-6">
+            ${hasLogo && design.showWatermark ? `
+              <div class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.045]">
+                <img src="${escapeHtml(design.logoUrl)}" alt="" class="h-64 w-64 object-contain" />
+              </div>
+            ` : ""}
+
+            <!-- Top Copy Label & Session Strip -->
+            <div class="relative z-10 flex items-center justify-between border-b border-slate-300 pb-2 text-xs">
+              <span class="font-bold uppercase tracking-widest text-slate-700">Academic Session: ${escapeHtml(scholar.academicYear || school.academicYear)}</span>
+              <span class="rounded px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider ${theme.badge}">${escapeHtml(copyLabel)}</span>
+            </div>
+
+            <!-- Main School Header with Logo -->
+            <div id="preview-header" class="relative z-10 mt-3 flex flex-col items-center gap-4 border-b-2 border-double border-slate-900 pb-4 sm:flex-row sm:items-center sm:justify-between">
+              <div class="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+                ${hasLogo ? `
+                  <img
+                    src="${escapeHtml(design.logoUrl)}"
+                    alt="${escapeHtml(design.title || school.name)} Logo"
+                    style="width:${logoSizePx}px;height:${logoSizePx}px;"
+                    class="shrink-0 rounded-lg border border-slate-200 bg-white object-contain p-1 shadow-sm"
+                  />
+                ` : ""}
+                <div class="text-center sm:text-left">
+                  <h2 id="preview-title" class="text-xl sm:text-2xl font-extrabold uppercase tracking-wide text-slate-950 leading-tight">${escapeHtml(design.title || school.name)}</h2>
+                  ${design.tagline ? `<p id="preview-tagline" class="mt-0.5 text-sm italic font-semibold text-slate-800">"${escapeHtml(design.tagline)}"</p>` : `<p id="preview-tagline" class="hidden"></p>`}
+                  ${design.address ? `<p id="preview-address" class="mt-1 text-xs sm:text-[13px] font-medium text-slate-700">${escapeHtml(design.address)}</p>` : `<p id="preview-address" class="hidden"></p>`}
+                </div>
+              </div>
+              <div class="text-center sm:text-right shrink-0">
+                <div class="inline-block rounded border border-slate-900 bg-slate-50 px-3 py-1.5">
+                  <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Receipt Number</p>
+                  <p id="preview-prefix" class="text-sm sm:text-base font-extrabold tracking-wide text-slate-950 tabular-nums">${escapeHtml(receiptId)}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Student & Payment Metadata Table -->
+            <div class="relative z-10 mt-4 overflow-hidden rounded border border-slate-400">
+              <table class="w-full text-left text-[13px] sm:text-[14px] leading-snug">
+                <tbody class="divide-y divide-slate-300">
+                  <tr>
+                    <th class="w-1/6 bg-slate-100 px-3 py-2 font-bold text-slate-700">Student Name</th>
+                    <td class="w-2/6 px-3 py-2 font-bold text-slate-950">${escapeHtml(scholar.fullName)}</td>
+                    <th class="w-1/6 bg-slate-100 px-3 py-2 font-bold text-slate-700">Receipt Date</th>
+                    <td class="w-2/6 px-3 py-2 font-semibold text-slate-900">${escapeHtml(longDate(receiptDate))}</td>
+                  </tr>
+                  <tr>
+                    <th class="bg-slate-100 px-3 py-2 font-bold text-slate-700">Admission No.</th>
+                    <td class="px-3 py-2 font-bold text-slate-900">${escapeHtml(scholar.studentCode)}</td>
+                    <th class="bg-slate-100 px-3 py-2 font-bold text-slate-700">Class / Roll</th>
+                    <td class="px-3 py-2 font-semibold text-slate-900">${escapeHtml(scholar.grade)}${scholar.rollNumber ? ` (Roll: ${escapeHtml(scholar.rollNumber)})` : ""}</td>
+                  </tr>
+                  <tr>
+                    <th class="bg-slate-100 px-3 py-2 font-bold text-slate-700">Parent / Guardian</th>
+                    <td class="px-3 py-2 font-semibold text-slate-900">${escapeHtml(scholar.guardianName)} (${escapeHtml(scholar.phone)})</td>
+                    <th class="bg-slate-100 px-3 py-2 font-bold text-slate-700">Payment Mode</th>
+                    <td class="px-3 py-2 font-semibold uppercase text-slate-900">${escapeHtml(payment.method.replace(/_/g, " "))}${payment.reference ? ` · Ref: ${escapeHtml(payment.reference)}` : ""}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Particulars & Installment Table (Increased Row Height & Font Size) -->
+            <div class="relative z-10 mt-4 overflow-hidden rounded border border-slate-900">
+              <table class="w-full text-left text-[14px] sm:text-[15px]">
+                <thead class="border-b border-slate-900 bg-slate-100 text-xs sm:text-[13px] uppercase tracking-wider text-slate-900">
+                  <tr>
+                    <th class="w-12 border-r border-slate-300 px-3 py-2.5 text-center font-bold">S.No.</th>
+                    <th class="border-r border-slate-300 px-3.5 py-2.5 font-bold">Particulars / Installment Description</th>
+                    <th class="w-28 border-r border-slate-300 px-3 py-2.5 text-right font-bold">Installment Fee</th>
+                    <th class="w-28 border-r border-slate-300 px-3 py-2.5 text-right font-bold">Remaining</th>
+                    <th class="w-32 px-3.5 py-2.5 text-right font-bold">Paid Amount</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-300">
+                  ${paymentAllocs.map((item, idx) => {
+                    const rem = Math.max(0, item.installmentAmount - item.paidAmount);
+                    const st = item.paidAmount >= item.installmentAmount ? "Full Paid" : "Part Paid";
+                    return `
+                      <tr class="leading-relaxed">
+                        <td class="border-r border-slate-300 px-3 py-3 text-center font-semibold tabular-nums">${idx + 1}</td>
+                        <td class="border-r border-slate-300 px-3.5 py-3">
+                          <span class="font-bold text-slate-950">${escapeHtml(item.label)}</span>
+                          <span class="ml-2 inline-block rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">${st}</span>
+                        </td>
+                        <td class="border-r border-slate-300 px-3 py-3 text-right font-medium tabular-nums">${escapeHtml(money(item.installmentAmount))}</td>
+                        <td class="border-r border-slate-300 px-3 py-3 text-right font-medium tabular-nums">${escapeHtml(money(rem))}</td>
+                        <td class="px-3.5 py-3 text-right font-bold text-slate-950 tabular-nums">${escapeHtml(money(item.amount))}</td>
+                      </tr>
+                    `;
+                  }).join("")}
+                  ${payment.lateFee > 0 ? `
+                    <tr class="leading-relaxed bg-amber-50/40">
+                      <td class="border-r border-slate-300 px-3 py-2.5 text-center font-semibold tabular-nums">${paymentAllocs.length + 1}</td>
+                      <td class="border-r border-slate-300 px-3.5 py-2.5 font-bold text-slate-900">Late Fee / Fine Charges</td>
+                      <td class="border-r border-slate-300 px-3 py-2.5 text-right tabular-nums">—</td>
+                      <td class="border-r border-slate-300 px-3 py-2.5 text-right tabular-nums">—</td>
+                      <td class="px-3.5 py-2.5 text-right font-bold text-slate-950 tabular-nums">${escapeHtml(money(payment.lateFee))}</td>
+                    </tr>
+                  ` : ""}
+                </tbody>
+                <tfoot class="border-t-2 border-slate-900 bg-slate-100">
+                  <tr>
+                    <td colspan="4" class="border-r border-slate-300 px-3.5 py-3 text-right text-sm sm:text-base font-extrabold uppercase tracking-wide text-slate-950">
+                      Total Amount Received
+                    </td>
+                    <td class="px-3.5 py-3 text-right text-base sm:text-lg font-extrabold text-slate-950 tabular-nums">
+                      ${escapeHtml(money(payment.amount))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            <!-- Amount in Words & Account Balance Summary -->
+            <div class="relative z-10 mt-3 grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+              <div class="rounded border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-[13px] sm:text-[14px]">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Amount in Words</p>
+                <p class="mt-0.5 font-bold italic text-slate-950">${escapeHtml(numberToIndianWords(payment.amount))}</p>
+                ${payment.note ? `<p class="mt-1 text-xs text-slate-700"><strong>Remarks:</strong> ${escapeHtml(payment.note)}</p>` : ""}
+              </div>
+              <div class="grid grid-cols-3 divide-x divide-slate-300 rounded border border-slate-300 bg-slate-50 text-center text-xs">
+                <div class="p-2">
+                  <p class="text-[10px] font-bold uppercase text-slate-500">Annual Net</p>
+                  <p class="mt-1 font-bold text-slate-900 tabular-nums">${escapeHtml(money(annualNetFee))}</p>
+                </div>
+                <div class="p-2">
+                  <p class="text-[10px] font-bold uppercase text-emerald-800">Paid Till Date</p>
+                  <p class="mt-1 font-bold text-emerald-900 tabular-nums">${escapeHtml(money(totalPaidTillDate))}</p>
+                </div>
+                <div class="p-2">
+                  <p class="text-[10px] font-bold uppercase text-rose-800">Balance Due</p>
+                  <p class="mt-1 font-bold text-rose-900 tabular-nums">${escapeHtml(money(remainingAnnual))}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Footer & Signatory Block -->
+            <div class="relative z-10 mt-6 flex flex-col justify-between gap-6 border-t border-slate-300 pt-4 sm:flex-row sm:items-end">
+              <div class="max-w-md text-xs leading-relaxed text-slate-700">
+                <p id="preview-footer" class="font-semibold">${escapeHtml(design.footer || "Keep this receipt for your records.")}</p>
+                <p class="mt-1 text-[11px] text-slate-500">Status: Official Staff-Confirmed Receipt (${escapeHtml(payment.recordedByName || "Authorized Staff")}).</p>
+              </div>
+              <div class="text-center sm:text-right shrink-0">
+                <div class="inline-block min-w-[200px] border-t border-dashed border-slate-800 pt-2">
+                  <p id="preview-signatory" class="text-xs sm:text-sm font-bold text-slate-950">${escapeHtml(design.signatory || "Authorized Signatory")}</p>
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500">Stamp & Signature</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    let currentOpenReceiptId = null;
+
+    function openReceiptModal(receiptId) {
+      currentOpenReceiptId = receiptId;
+      const school = getActiveSchool();
+      const receipt = state.receipts.find(r => r.receiptId === receiptId && r.schoolId === school.schoolId);
+      if (!receipt) {
+        showToast("Receipt not found for this school.", "error");
+        return;
+      }
+      const payment = state.payments.find(p => p.paymentId === receipt.paymentId);
+      const scholar = state.scholars.find(s => s.scholarId === receipt.scholarId);
+      if (!payment || !scholar) return;
+
+      const cutoff = payment.confirmedAt || receipt.receiptDate;
+      const histMap = computeHistoricalPaidMap(school.schoolId, payment.paymentId, cutoff);
+      const paymentAllocs = state.allocations
+        .filter(a => a.paymentId === payment.paymentId)
+        .map(a => {
+          const inst = state.installments.find(i => i.installmentId === a.installmentId);
+          const instAmt = inst ? inst.amount : a.amount;
+          const paidAsOfReceipt = Math.min(instAmt, histMap[a.installmentId] || a.amount);
+          return {
+            ...a,
+            label: inst ? inst.label : a.installmentId,
+            installmentAmount: instAmt,
+            paidAmount: paidAsOfReceipt
+          };
+        });
+
+      const scholarInstallments = state.installments.filter(i => i.scholarId === scholar.scholarId);
+      const totalPaidTillDate = scholarInstallments.reduce((acc, i) => acc + Math.min(i.amount, histMap[i.installmentId] || 0), 0);
+
+      const design = school.receiptDesign || {
+        title: school.name.toUpperCase(),
+        tagline: "Where Education Meets Excellence",
+        address: school.phone,
+        prefix: "SP-",
+        signatory: school.principal,
+        footer: "Keep this receipt for your records.",
+        accent: "indigo",
+        fontFamily: "times",
+        logoUrl: DEFAULT_BLESS_LOGO,
+        logoSize: "72",
+        showWatermark: true
+      };
+
+      const copy1Html = buildFormalReceiptCopyHtml({
+        copyLabel: state.receiptDualCopy ? "Parent / Student Copy" : "Official Receipt",
+        school,
+        design,
+        receiptId: receipt.receiptId,
+        receiptDate: receipt.receiptDate,
+        scholar,
+        payment,
+        paymentAllocs,
+        annualNetFee: scholar.netAnnual,
+        totalPaidTillDate
+      });
+
+      const copy2Html = state.receiptDualCopy
+        ? `<div class="my-4 border-t-2 border-dashed border-slate-400 pt-4">
+            ${buildFormalReceiptCopyHtml({
+              copyLabel: "School Office Copy",
+              school,
+              design,
+              receiptId: receipt.receiptId,
+              receiptDate: receipt.receiptDate,
+              scholar,
+              payment,
+              paymentAllocs,
+              annualNetFee: scholar.netAnnual,
+              totalPaidTillDate
+            })}
+          </div>`
+        : "";
+
+      const area = document.getElementById("receipt-print-area");
+      area.innerHTML = `
+        <div class="no-print flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-900 px-5 py-3.5 text-white">
+          <div>
+            <h2 id="receipt-modal-heading" class="text-sm font-bold">Official Printable Receipt · ${escapeHtml(receipt.receiptId)}</h2>
+            <p class="text-[11px] text-slate-300">Formatted in Times New Roman with school logo & Indian currency words</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 cursor-pointer">
+              <input id="chk-dual-copy" type="checkbox" ${state.receiptDualCopy ? "checked" : ""} class="rounded accent-indigo-500" />
+              <span>Dual Copy (Student + Office)</span>
+            </label>
+            <button id="btn-print-receipt" type="button" class="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-indigo-500">🖨️ Print Receipt</button>
+            <button id="btn-close-receipt" type="button" aria-label="Close receipt" class="grid h-8 w-8 place-items-center rounded-lg border border-slate-700 text-slate-300 hover:bg-slate-800">✕</button>
+          </div>
+        </div>
+        <div class="p-4 sm:p-6 bg-white">
+          ${copy1Html}
+          ${copy2Html}
+          <div class="no-print mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-4">
+            ${isSchoolAdmin() && school.status !== "locked" ? `
+              <button id="btn-reverse-receipt" type="button" class="rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-2 text-xs font-bold text-rose-800 hover:bg-rose-100">Reverse / Cancel Receipt</button>
+            ` : `<span></span>`}
+            <div class="flex gap-2">
+              <button id="btn-print-receipt-bottom" type="button" class="rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-800">🖨️ Print Official Receipt</button>
+              <button id="btn-close-receipt-bottom" type="button" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Close</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const backdrop = document.getElementById("receipt-modal-backdrop");
+      backdrop.classList.remove("hidden");
+      backdrop.classList.add("grid");
+
+      document.getElementById("btn-close-receipt").addEventListener("click", closeReceiptModal);
+      document.getElementById("btn-close-receipt-bottom").addEventListener("click", closeReceiptModal);
+      document.getElementById("btn-print-receipt").addEventListener("click", () => window.print());
+      document.getElementById("btn-print-receipt-bottom").addEventListener("click", () => window.print());
+      document.getElementById("chk-dual-copy").addEventListener("change", e => {
+        state.receiptDualCopy = e.target.checked;
+        saveState();
+        openReceiptModal(receiptId);
+      });
+
+      const revBtn = document.getElementById("btn-reverse-receipt");
+      if (revBtn) {
+        revBtn.addEventListener("click", () => {
+          closeReceiptModal();
+          openActionModal({
+            title: `Reverse confirmed receipt ${receipt.receiptId}`,
+            description: `Reverse this receipt of ${money(payment.amount)} for ${scholar.fullName}? This restores the unpaid installment balances and marks the payment voided in the audit log.`,
+            confirmLabel: "Reverse receipt & restore balance",
+            confirmTone: "rose",
+            requireReason: true,
+            reasonLabel: "Reason for reversing confirmed receipt (minimum 5 characters) *",
+            onConfirm: reason => {
+              const allocs = state.allocations.filter(a => a.paymentId === payment.paymentId);
+              allocs.forEach(a => {
+                const inst = state.installments.find(i => i.installmentId === a.installmentId);
+                if (inst) inst.paidAmount = Math.max(0, inst.paidAmount - a.amount);
+              });
+              payment.status = "voided";
+              state.receipts = state.receipts.filter(r => r.receiptId !== receipt.receiptId);
+              logAudit(school.schoolId, "receipt.reversed", "receipt", receipt.receiptId, { paymentId: payment.paymentId, amount: payment.amount, reason });
+              saveState();
+              renderApp();
+              showToast(`Reversed receipt ${receipt.receiptId} and restored installment balances.`);
+            }
+          });
+        });
+      }
+    }
+
+    function closeReceiptModal() {
+      const backdrop = document.getElementById("receipt-modal-backdrop");
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("grid");
+      currentOpenReceiptId = null;
+    }
+
+    // =========================================================================
+    // Edit Scholar Modal Controller
+    // =========================================================================
+    function openEditScholarModal(scholarId) {
+      const school = getActiveSchool();
+      const scholar = state.scholars.find(s => s.scholarId === scholarId && s.schoolId === school.schoolId);
+      if (!scholar) return;
+      document.getElementById("edit-scholar-id").value = scholar.scholarId;
+      document.getElementById("edit-student-code").value = scholar.studentCode;
+      document.getElementById("edit-full-name").value = scholar.fullName;
+      document.getElementById("edit-grade").value = scholar.grade;
+      document.getElementById("edit-roll").value = scholar.rollNumber || "";
+      document.getElementById("edit-guardian").value = scholar.guardianName;
+      document.getElementById("edit-phone").value = scholar.phone;
+      document.getElementById("edit-email").value = scholar.email || "";
+
+      const backdrop = document.getElementById("edit-scholar-backdrop");
+      backdrop.classList.remove("hidden");
+      backdrop.classList.add("grid");
+    }
+
+    function closeEditScholarModal() {
+      const backdrop = document.getElementById("edit-scholar-backdrop");
+      backdrop.classList.add("hidden");
+      backdrop.classList.remove("grid");
+    }
+
+    document.getElementById("edit-scholar-close").addEventListener("click", closeEditScholarModal);
+    document.getElementById("edit-scholar-cancel").addEventListener("click", closeEditScholarModal);
+    document.getElementById("edit-scholar-form").addEventListener("submit", function(e) {
+      e.preventDefault();
+      if (!canWrite()) {
+        showToast("Writes are disabled for your current role or school lock status.", "error");
+        return;
+      }
+      const school = getActiveSchool();
+      const scholarId = document.getElementById("edit-scholar-id").value;
+      const newCode = document.getElementById("edit-student-code").value.trim();
+      const scholar = state.scholars.find(s => s.scholarId === scholarId && s.schoolId === school.schoolId);
+      if (!scholar) return;
+
+      const duplicate = state.scholars.find(s => s.schoolId === school.schoolId && s.studentCode.toLowerCase() === newCode.toLowerCase() && s.scholarId !== scholarId);
+      if (duplicate) {
+        showToast("Another scholar at this school already uses that student code.", "error");
+        return;
+      }
+
+      scholar.studentCode = newCode;
+      scholar.fullName = document.getElementById("edit-full-name").value.trim();
+      scholar.grade = document.getElementById("edit-grade").value.trim();
+      scholar.rollNumber = document.getElementById("edit-roll").value.trim() || null;
+      scholar.guardianName = document.getElementById("edit-guardian").value.trim();
+      scholar.phone = document.getElementById("edit-phone").value.trim();
+      scholar.email = document.getElementById("edit-email").value.trim() || null;
+
+      state.payments.forEach(p => {
+        if (p.scholarId === scholarId) {
+          p.scholarName = scholar.fullName;
+          p.studentCode = scholar.studentCode;
+        }
+      });
+
+      logAudit(school.schoolId, "scholar.updated", "scholar", scholarId, { studentCode: scholar.studentCode, fullName: scholar.fullName });
+      saveState();
+      closeEditScholarModal();
+      renderApp();
+      showToast(`Updated scholar ${scholar.fullName}.`);
+    });
+
+    // =========================================================================
+    // Main UI Rendering
+    // =========================================================================
+    function statusPill(text, tone = "gray") {
+      const tones = {
+        green: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+        amber: "bg-amber-50 text-amber-900 ring-amber-200",
+        red: "bg-rose-50 text-rose-800 ring-rose-200",
+        blue: "bg-indigo-50 text-indigo-800 ring-indigo-200",
+        gray: "bg-slate-100 text-slate-700 ring-slate-200"
+      };
+      return `<span class="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ring-inset ${tones[tone] || tones.gray}">${escapeHtml(text)}</span>`;
+    }
+
+    function renderHeaderAndNav() {
+      const schoolSelector = document.getElementById("school-selector");
+      schoolSelector.innerHTML = state.schools.map(s =>
+        `<option value="${escapeHtml(s.schoolId)}" ${s.schoolId === state.activeSchoolId ? "selected" : ""}>${escapeHtml(s.name)}${s.status === "locked" ? " · Locked" : ""}</option>`
+      ).join("");
+
+      const roleSelector = document.getElementById("role-selector");
+      roleSelector.value = state.currentRole;
+
+      const tabs = [
+        { id: "overview", title: "Overview" },
+        { id: "scholars", title: "Scholars" },
+        { id: "collect", title: "Record payment" },
+        { id: "receipts", title: "Receipts" },
+        { id: "receipt-design", title: "Receipt settings" },
+        ...(isOwner() ? [{ id: "owner", title: "Owner console" }] : [])
+      ];
+
+      if (!isOwner() && state.activeTab === "owner") {
+        state.activeTab = "overview";
+      }
+
+      const navEl = document.getElementById("main-nav");
+      navEl.innerHTML = tabs.map(t => {
+        const active = state.activeTab === t.id;
+        return `<button type="button" data-tab="${t.id}" class="flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${active ? "bg-indigo-50 text-indigo-800" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"}">${escapeHtml(t.title)}</button>`;
+      }).join("");
+
+      navEl.querySelectorAll("button[data-tab]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.activeTab = btn.getAttribute("data-tab");
+          saveState();
+          renderApp();
+        });
+      });
+
+      const school = getActiveSchool();
+      const lockedBanner = document.getElementById("locked-banner");
+      if (school && school.status === "locked") {
+        lockedBanner.classList.remove("hidden");
+        lockedBanner.innerHTML = `
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="font-extrabold text-rose-950">School account locked — Kindly contact to the owner</p>
+              <p class="mt-1 text-sm text-rose-900">${escapeHtml(school.lockReason || "Contact the platform owner to clear subscription dues and restore access.")} All fee-record changes are disabled.</p>
+            </div>
+            ${isOwner() ? `<button id="btn-banner-unlock" type="button" class="rounded-xl bg-emerald-700 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-800">Unlock in Owner Console</button>` : ""}
+          </div>
+        `;
+        const unlockBtn = document.getElementById("btn-banner-unlock");
+        if (unlockBtn) {
+          unlockBtn.addEventListener("click", () => {
+            state.activeTab = "owner";
+            renderApp();
+          });
+        }
+      } else {
+        lockedBanner.classList.add("hidden");
+      }
+    }
+
+    function renderOverview(container, school) {
+      const scholars = state.scholars.filter(s => s.schoolId === school.schoolId);
+      const installments = state.installments.filter(i => i.schoolId === school.schoolId);
+      const payments = state.payments.filter(p => p.schoolId === school.schoolId);
+      const totalFees = scholars.reduce((s, x) => s + x.netAnnual, 0);
+      const collected = installments.reduce((s, x) => s + x.paidAmount, 0);
+      const balance = Math.max(0, totalFees - collected);
+      const pendingTotal = payments.filter(p => p.status === "pending_manual").reduce((s, p) => s + p.amount, 0);
+      const todayIst = todayIsoIst();
+      const overdueCount = installments.filter(i => i.dueDate < todayIst && i.paidAmount < i.amount).length;
+
+      container.innerHTML = `
+        <div class="mb-7 flex flex-col justify-between gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[.16em] text-indigo-700">${escapeHtml(school.academicYear)} · ${escapeHtml(school.name)}</p>
+            <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Fee operations overview</h1>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Enrolled scholars, confirmed collections, outstanding balances, and manual entries awaiting administrator confirmation.</p>
+          </div>
+          <button id="ov-register-btn" type="button" class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-indigo-800">+ Register scholar</button>
+        </div>
+
+        <section aria-label="Fee summary" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Registered scholars</p>
+            <p class="mt-3 text-2xl font-extrabold tracking-tight text-slate-950 tabular-nums">${scholars.length}</p>
+            <p class="mt-2 text-xs text-slate-500">Session ${escapeHtml(school.academicYear)}</p>
+          </article>
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Net annual fees</p>
+            <p class="mt-3 text-2xl font-extrabold tracking-tight text-slate-950 tabular-nums">${escapeHtml(money(totalFees))}</p>
+            <p class="mt-2 text-xs text-slate-500">After recorded scholarships</p>
+          </article>
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Recorded as paid</p>
+            <p class="mt-3 text-2xl font-extrabold tracking-tight text-emerald-800 tabular-nums">${escapeHtml(money(collected))}</p>
+            <p class="mt-2 text-xs text-slate-500">Staff-confirmed manual entries</p>
+          </article>
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-wide text-amber-800">Outstanding balance</p>
+            <p class="mt-3 text-2xl font-extrabold tracking-tight text-slate-950 tabular-nums">${escapeHtml(money(balance))}</p>
+            <p class="mt-2 text-xs text-slate-500">${overdueCount} installment${overdueCount === 1 ? "" : "s"} past due (IST: ${todayIst})</p>
+          </article>
+        </section>
+
+        <section class="mt-4 flex flex-col justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center">
+          <div>
+            <p class="text-sm font-bold text-amber-950">Manual entries awaiting confirmation</p>
+            <p class="mt-1 text-xs leading-5 text-amber-900">Pending records reserve installment balance but are not counted as paid or issued a receipt until confirmed by a school administrator.</p>
+          </div>
+          <div class="flex items-center gap-3 sm:shrink-0">
+            <strong class="text-lg text-amber-950 tabular-nums">${escapeHtml(money(pendingTotal))}</strong>
+            <button id="ov-review-pending" type="button" class="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100">Review (${payments.filter(p => p.status === "pending_manual").length})</button>
+          </div>
+        </section>
+
+        <div class="mt-7 grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,.9fr)]">
+          <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <h2 class="font-bold">Scholar fee accounts</h2>
+                <p class="mt-1 text-xs text-slate-500">Annual totals and installment progress</p>
+              </div>
+              <button id="ov-open-directory" type="button" class="text-xs font-bold text-indigo-700 hover:underline">Open directory →</button>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[640px] text-left text-sm">
+                <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th class="px-5 py-3 font-bold">Scholar</th>
+                    <th class="px-4 py-3 font-bold">Course</th>
+                    <th class="px-4 py-3 font-bold">Annual fee</th>
+                    <th class="px-4 py-3 font-bold">Progress</th>
+                    <th class="px-5 py-3 text-right font-bold">Balance</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${scholars.map(scholar => {
+                    const list = installments.filter(i => i.scholarId === scholar.scholarId);
+                    const paid = list.reduce((s, i) => s + i.paidAmount, 0);
+                    const bal = Math.max(0, scholar.netAnnual - paid);
+                    const pct = scholar.netAnnual ? Math.round((paid * 100) / scholar.netAnnual) : 0;
+                    return `
+                      <tr class="hover:bg-slate-50/70">
+                        <td class="px-5 py-3.5">
+                          <p class="font-bold text-slate-900">${escapeHtml(scholar.fullName)}</p>
+                          <p class="mt-0.5 font-mono text-[11px] text-slate-500">${escapeHtml(scholar.studentCode)} · ${escapeHtml(scholar.scholarId)}</p>
+                        </td>
+                        <td class="px-4 py-3.5 text-xs text-slate-600">${escapeHtml(scholar.grade)}</td>
+                        <td class="px-4 py-3.5 font-semibold tabular-nums">${escapeHtml(money(scholar.netAnnual))} <span class="ml-1 text-[10px] font-medium text-slate-400">${scholar.scholarshipPct}% aid</span></td>
+                        <td class="px-4 py-3.5">
+                          <div class="flex items-center gap-2">
+                            <div class="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100"><div class="h-full rounded-full bg-indigo-600" style="width:${pct}%"></div></div>
+                            <span class="text-xs text-slate-600 tabular-nums">${pct}%</span>
+                          </div>
+                        </td>
+                        <td class="px-5 py-3.5 text-right font-bold tabular-nums">${escapeHtml(money(bal))}</td>
+                      </tr>
+                    `;
+                  }).join("")}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="border-b border-slate-100 px-5 py-4">
+              <h2 class="font-bold">Recent manual entries</h2>
+              <p class="mt-1 text-xs text-slate-500">Includes saved payment references</p>
+            </div>
+            <div class="divide-y divide-slate-100">
+              ${payments.slice(0, 6).map(p => `
+                <div class="flex items-start justify-between gap-3 px-5 py-3.5">
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold">${escapeHtml(p.scholarName)}</p>
+                    <p class="mt-1 text-xs text-slate-500">${escapeHtml(p.method.replace(/_/g, " "))} · ${escapeHtml(shortDate(p.createdAt))}${p.reference ? ` · Ref: ${escapeHtml(p.reference)}` : ""}</p>
+                  </div>
+                  <div class="shrink-0 text-right">
+                    <p class="text-sm font-bold tabular-nums">${escapeHtml(money(p.amount))}</p>
+                    ${statusPill(p.status.replace(/_/g, " "), p.status === "manual_confirmed" ? "green" : p.status === "pending_manual" ? "amber" : "gray")}
+                  </div>
+                </div>
+              `).join("") || `<p class="p-7 text-center text-sm text-slate-500">No payments recorded.</p>`}
+            </div>
+            <div class="border-t border-slate-100 p-4">
+              <button id="ov-open-receipts" type="button" class="text-xs font-bold text-indigo-700 hover:underline">View receipt ledger →</button>
+            </div>
+          </section>
+        </div>
+      `;
+
+      document.getElementById("ov-register-btn").addEventListener("click", () => {
+        state.activeTab = "scholars";
+        state.showScholarForm = true;
+        renderApp();
+      });
+      document.getElementById("ov-review-pending").addEventListener("click", () => {
+        state.activeTab = "collect";
+        renderApp();
+      });
+      document.getElementById("ov-open-directory").addEventListener("click", () => {
+        state.activeTab = "scholars";
+        renderApp();
+      });
+      document.getElementById("ov-open-receipts").addEventListener("click", () => {
+        state.activeTab = "receipts";
+        renderApp();
+      });
+    }
+
+    function renderScholarRowsHtml(scholars, writable) {
+      if (!scholars.length) {
+        return `<tr><td colspan="6" class="p-8 text-center text-sm text-slate-500">No matching scholars found.</td></tr>`;
+      }
+      return scholars.map(scholar => {
+        const items = state.installments.filter(i => i.scholarId === scholar.scholarId);
+        const paid = items.reduce((s, i) => s + i.paidAmount, 0);
+        const settledCount = items.filter(i => i.paidAmount >= i.amount).length;
+        const partialCount = items.filter(i => i.paidAmount > 0 && i.paidAmount < i.amount).length;
+        return `
+          <tr class="hover:bg-slate-50/50">
+            <td class="px-5 py-4">
+              <p class="font-bold text-slate-900">${escapeHtml(scholar.fullName)}</p>
+              <p class="mt-1 font-mono text-[11px] text-slate-500">${escapeHtml(scholar.studentCode)} · ${escapeHtml(scholar.scholarId)}${scholar.rollNumber ? ` · Roll ${escapeHtml(scholar.rollNumber)}` : ""}</p>
+              <p class="mt-1 text-xs text-slate-600">${escapeHtml(scholar.grade)}</p>
+            </td>
+            <td class="px-4 py-4">
+              <p class="font-medium">${escapeHtml(scholar.guardianName)}</p>
+              <p class="mt-1 text-xs text-slate-500">${escapeHtml(scholar.phone)}</p>
+            </td>
+            <td class="px-4 py-4 tabular-nums">
+              <p class="font-bold">${escapeHtml(money(scholar.netAnnual))}</p>
+              <p class="mt-1 text-xs text-slate-500">${scholar.scholarshipPct}% concession</p>
+            </td>
+            <td class="px-4 py-4 text-xs text-slate-600">${settledCount} / ${items.length} settled · ${partialCount} partial</td>
+            <td class="px-4 py-4 text-right font-bold tabular-nums">${escapeHtml(money(Math.max(0, scholar.netAnnual - paid)))}</td>
+            <td class="px-5 py-4 text-right">
+              <div class="flex justify-end gap-2">
+                <button type="button" data-collect-scholar="${escapeHtml(scholar.scholarId)}" class="rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-bold text-indigo-800 hover:bg-indigo-100">Collect</button>
+                ${writable ? `<button type="button" data-edit-scholar="${escapeHtml(scholar.scholarId)}" class="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Edit</button>` : ""}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function bindScholarTableButtons(container) {
+      container.querySelectorAll("button[data-collect-scholar]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.collectScholarId = btn.getAttribute("data-collect-scholar");
+          state.collectSelected = {};
+          state.activeTab = "collect";
+          renderApp();
+        });
+      });
+
+      container.querySelectorAll("button[data-edit-scholar]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          openEditScholarModal(btn.getAttribute("data-edit-scholar"));
+        });
+      });
+    }
+
+    function renderScholars(container, school) {
+      const writable = canWrite();
+      const allScholars = state.scholars.filter(s => s.schoolId === school.schoolId);
+      const q = (state.scholarSearch || "").toLowerCase();
+      const filtered = allScholars.filter(s => `${s.fullName} ${s.studentCode} ${s.grade} ${s.guardianName}`.toLowerCase().includes(q));
+
+      container.innerHTML = `
+        <div class="mb-7 flex flex-col justify-between gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[.16em] text-indigo-700">Student accounts</p>
+            <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Scholar directory</h1>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Search authorized school records, edit scholar details, or register new scholars with automatic installment schedules.</p>
+          </div>
+          ${writable ? `<button id="btn-toggle-scholar-form" type="button" class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-800">${state.showScholarForm ? "Close form" : "+ Register scholar"}</button>` : ""}
+        </div>
+
+        ${state.showScholarForm && writable ? `
+          <form id="form-register-scholar" class="mb-6 rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm sm:p-6">
+            <div class="mb-5">
+              <h2 class="font-bold">New scholar account</h2>
+              <p class="mt-1 text-xs text-slate-500">All fee totals and installment amounts are validated and split into exact integer rupees.</p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-code">Student / admission code *</label>
+                <input id="reg-code" required placeholder="e.g. BIS-26-103" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-name">Scholar full name *</label>
+                <input id="reg-name" required minlength="2" placeholder="e.g. Rohan Kumar" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-grade">Grade / course *</label>
+                <input id="reg-grade" required placeholder="e.g. Class 9 · Section A" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-roll">Roll number</label>
+                <input id="reg-roll" placeholder="e.g. 21" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-guardian">Parent / guardian *</label>
+                <input id="reg-guardian" required minlength="2" placeholder="e.g. Manoj Kumar" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-phone">Phone *</label>
+                <input id="reg-phone" type="tel" required minlength="6" placeholder="e.g. 9876543210" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-email">Email</label>
+                <input id="reg-email" type="email" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-tuition">Annual tuition (₹) *</label>
+                <input id="reg-tuition" type="number" min="1" step="1" required value="24000" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-other">Other annual fees (₹)</label>
+                <input id="reg-other" type="number" min="0" step="1" value="0" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-scholarship">Scholarship concession (%) *</label>
+                <input id="reg-scholarship" type="number" min="0" max="100" step="1" value="0" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-installments">Installment plan</label>
+                <select id="reg-installments" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+                  <option value="12">12 monthly installments</option>
+                  <option value="6">6 bi-monthly installments</option>
+                  <option value="4">4 quarterly installments</option>
+                </select>
+              </div>
+              <div>
+                <label class="mb-1.5 block text-xs font-semibold text-slate-700" for="reg-dueday">Monthly due day (1–28)</label>
+                <input id="reg-dueday" type="number" min="1" max="28" value="10" required class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+              </div>
+            </div>
+            <div class="mt-5 flex flex-wrap gap-2">
+              <button type="submit" class="rounded-xl bg-indigo-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-800">Create scholar & schedule</button>
+              <button id="btn-cancel-scholar-form" type="button" class="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold">Cancel</button>
+            </div>
+          </form>
+        ` : ""}
+
+        <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <p id="scholar-count-label" class="text-sm text-slate-600"><strong class="text-slate-900">${filtered.length}</strong> scholar${filtered.length === 1 ? "" : "s"}</p>
+          <div class="w-full sm:max-w-xs">
+            <label class="sr-only" for="input-scholar-search">Search scholar directory</label>
+            <input id="input-scholar-search" value="${escapeHtml(state.scholarSearch)}" placeholder="Search name, code, course…" class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm" />
+          </div>
+        </div>
+
+        <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[760px] text-left text-sm">
+              <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th class="px-5 py-3">Scholar account</th>
+                  <th class="px-4 py-3">Guardian</th>
+                  <th class="px-4 py-3">Annual net fee</th>
+                  <th class="px-4 py-3">Installments paid</th>
+                  <th class="px-4 py-3 text-right">Balance</th>
+                  <th class="px-5 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="scholar-table-body" class="divide-y divide-slate-100">
+                ${renderScholarRowsHtml(filtered, writable)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      `;
+
+      const toggleBtn = document.getElementById("btn-toggle-scholar-form");
+      if (toggleBtn) {
+        toggleBtn.addEventListener("click", () => {
+          state.showScholarForm = !state.showScholarForm;
+          renderApp();
+        });
+      }
+      const cancelBtn = document.getElementById("btn-cancel-scholar-form");
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", () => {
+          state.showScholarForm = false;
+          renderApp();
+        });
+      }
+
+      // In-place search update without replacing the search input DOM node!
+      const searchInput = document.getElementById("input-scholar-search");
+      searchInput.addEventListener("input", e => {
+        state.scholarSearch = e.target.value;
+        const nextQ = state.scholarSearch.toLowerCase();
+        const nextFiltered = allScholars.filter(s => `${s.fullName} ${s.studentCode} ${s.grade} ${s.guardianName}`.toLowerCase().includes(nextQ));
+        const tbody = document.getElementById("scholar-table-body");
+        const countLabel = document.getElementById("scholar-count-label");
+        if (tbody) {
+          tbody.innerHTML = renderScholarRowsHtml(nextFiltered, writable);
+          bindScholarTableButtons(tbody);
+        }
+        if (countLabel) {
+          countLabel.innerHTML = `<strong class="text-slate-900">${nextFiltered.length}</strong> scholar${nextFiltered.length === 1 ? "" : "s"}`;
+        }
+      });
+
+      const regForm = document.getElementById("form-register-scholar");
+      if (regForm) {
+        regForm.addEventListener("submit", e => {
+          e.preventDefault();
+          try {
+            const studentCode = document.getElementById("reg-code").value.trim();
+            if (state.scholars.some(s => s.schoolId === school.schoolId && s.studentCode.toLowerCase() === studentCode.toLowerCase())) {
+              showToast("That student code already exists at this school.", "error");
+              return;
+            }
+            const tuitionFee = Number(document.getElementById("reg-tuition").value);
+            const otherFee = Number(document.getElementById("reg-other").value || 0);
+            const scholarshipPct = Number(document.getElementById("reg-scholarship").value || 0);
+            const installmentCount = Number(document.getElementById("reg-installments").value);
+            const dueDay = Number(document.getElementById("reg-dueday").value || 10);
+            const fees = calculateAnnualFees(tuitionFee, otherFee, scholarshipPct);
+            const startYear = Number(school.academicYear.slice(0, 4)) || 2026;
+            const scholarId = makeId("SP");
+
+            const dueMonthIndices = Array.from({ length: installmentCount }, (_, i) => Math.floor((i * 12) / installmentCount));
+            const splits = splitInstallments(fees.net, installmentCount);
+            const newInstallments = dueMonthIndices.map((mOff, seq) => {
+              const monthIndex = (3 + mOff) % 12;
+              const year = monthIndex < 3 ? startYear + 1 : startYear;
+              const month = String(monthIndex + 1).padStart(2, "0");
+              const day = String(Math.min(28, Math.max(1, dueDay))).padStart(2, "0");
+              const label = installmentCount === 12 ? `${MONTH_NAMES[mOff]} ${year}` : `Installment ${seq + 1} · ${MONTH_NAMES[mOff]} ${year}`;
+              return {
+                installmentId: makeId("INS"),
+                schoolId: school.schoolId,
+                scholarId,
+                sequence: seq + 1,
+                label,
+                dueDate: `${year}-${month}-${day}`,
+                amount: splits[seq],
+                paidAmount: 0
+              };
+            });
+
+            const newScholar = {
+              scholarId,
+              schoolId: school.schoolId,
+              studentCode,
+              fullName: document.getElementById("reg-name").value.trim(),
+              grade: document.getElementById("reg-grade").value.trim(),
+              rollNumber: document.getElementById("reg-roll").value.trim() || null,
+              guardianName: document.getElementById("reg-guardian").value.trim(),
+              phone: document.getElementById("reg-phone").value.trim(),
+              email: document.getElementById("reg-email").value.trim() || null,
+              tuitionFee,
+              otherFee,
+              scholarshipPct,
+              grossAnnual: fees.gross,
+              discountAmount: fees.discount,
+              netAnnual: fees.net,
+              installmentCount,
+              dueDay,
+              academicYear: school.academicYear
+            };
+
+            state.scholars.push(newScholar);
+            state.installments.push(...newInstallments);
+            logAudit(school.schoolId, "scholar.created", "scholar", scholarId, { studentCode, netAnnual: fees.net });
+            state.showScholarForm = false;
+            saveState();
+            renderApp();
+            showToast(`Scholar ${studentCode} registered with ${installmentCount} installments.`);
+          } catch (err) {
+            showToast(err.message || "Invalid scholar fee inputs.", "error");
+          }
+        });
+      }
+
+      bindScholarTableButtons(container);
+    }
+
+    // =========================================================================
+    // Fee Collection View — Zero Focus Loss / In-Place Live Totals
+    // =========================================================================
+    function renderCollect(container, school) {
+      const writable = canWrite();
+      const confirmable = isSchoolAdmin() && school.status !== "locked";
+      const scholars = state.scholars.filter(s => s.schoolId === school.schoolId);
+      if (!scholars.length) {
+        container.innerHTML = `<div class="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">Register a scholar first to record payments.</div>`;
+        return;
+      }
+
+      const activeScholar = scholars.find(s => s.scholarId === state.collectScholarId) || scholars[0];
+      state.collectScholarId = activeScholar.scholarId;
+
+      const pendingPayments = state.payments.filter(p => p.schoolId === school.schoolId && p.status === "pending_manual");
+      const pendingPaymentIds = new Set(pendingPayments.map(p => p.paymentId));
+      const pendingByInstallment = {};
+      state.allocations.forEach(a => {
+        if (pendingPaymentIds.has(a.paymentId)) {
+          pendingByInstallment[a.installmentId] = (pendingByInstallment[a.installmentId] || 0) + a.amount;
+        }
+      });
+
+      const scholarInstallments = state.installments.filter(i => i.scholarId === activeScholar.scholarId);
+      const getAvailable = inst => Math.max(0, inst.amount - inst.paidAmount - (pendingByInstallment[inst.installmentId] || 0));
+      const todayIst = todayIsoIst();
+
+      container.innerHTML = `
+        <div class="mb-7 border-b border-slate-200 pb-6">
+          <p class="text-xs font-bold uppercase tracking-[.16em] text-indigo-700">Fee collection</p>
+          <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Record a manual payment</h1>
+          <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Select installments or type any custom partial amount directly into the "Allocate now" box. Enter any multi-digit late fee smoothly without interruption.</p>
+        </div>
+
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,.85fr)]">
+          <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div class="w-full sm:max-w-md">
+                <label for="collect-scholar-select" class="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600">Scholar account</label>
+                <select id="collect-scholar-select" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold">
+                  ${scholars.map(s => `<option value="${escapeHtml(s.scholarId)}" ${s.scholarId === activeScholar.scholarId ? "selected" : ""}>${escapeHtml(s.fullName)} · ${escapeHtml(s.studentCode)}</option>`).join("")}
+                </select>
+              </div>
+              ${writable ? `
+                <div class="flex flex-wrap gap-2">
+                  <button id="btn-select-all-due" type="button" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100">Select Overdue</button>
+                  <button id="btn-clear-selection" type="button" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50">Clear</button>
+                  <button id="btn-add-installment" type="button" class="rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-800 hover:bg-indigo-100">+ Add Installment</button>
+                </div>
+              ` : ""}
+            </div>
+
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50 p-3">
+              <div>
+                <p class="font-bold text-slate-900">${escapeHtml(activeScholar.fullName)}</p>
+                <p class="mt-0.5 text-xs text-slate-500">${escapeHtml(activeScholar.grade)} · ${escapeHtml(activeScholar.academicYear)} · Guardian: ${escapeHtml(activeScholar.guardianName)}</p>
+              </div>
+              <div class="text-right text-xs">
+                <span class="text-slate-500">Annual Net Fee:</span>
+                <strong class="ml-1 text-sm text-slate-900 tabular-nums">${escapeHtml(money(activeScholar.netAnnual))}</strong>
+              </div>
+            </div>
+
+            <div class="overflow-x-auto">
+              <table class="w-full min-w-[640px] text-left text-sm">
+                <thead class="bg-slate-50 text-[11px] uppercase text-slate-500">
+                  <tr>
+                    <th class="px-3 py-3">Select</th>
+                    <th class="px-3 py-3">Installment</th>
+                    <th class="px-3 py-3">Due</th>
+                    <th class="px-3 py-3">Unreserved Balance</th>
+                    <th class="px-3 py-3">Allocate now (₹)</th>
+                    ${writable ? `<th class="px-3 py-3 text-right">Manage</th>` : ""}
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                  ${scholarInstallments.map(item => {
+                    const rem = getAvailable(item);
+                    const reserved = pendingByInstallment[item.installmentId] || 0;
+                    const rawVal = state.collectSelected[item.installmentId];
+                    const amt = rawVal !== undefined && rawVal !== "" ? Number(rawVal) : 0;
+                    const pState = item.paidAmount >= item.amount ? "Settled" : item.paidAmount > 0 ? "Partially paid" : item.dueDate < todayIst ? "Overdue" : "Upcoming";
+                    const pTone = pState === "Settled" ? "green" : pState === "Overdue" ? "red" : pState === "Partially paid" ? "amber" : "blue";
+                    const canDeleteInst = writable && item.paidAmount === 0 && reserved === 0 && scholarInstallments.length > 1;
+                    return `
+                      <tr>
+                        <td class="px-3 py-3">
+                          <input type="checkbox" data-inst-check="${escapeHtml(item.installmentId)}" data-inst-rem="${rem}" ${!writable || rem <= 0 ? "disabled" : ""} ${amt > 0 ? "checked" : ""} class="h-4 w-4 rounded border-slate-300 accent-indigo-700" />
+                        </td>
+                        <td class="px-3 py-3">
+                          <p class="font-semibold text-slate-900">${escapeHtml(item.label)}</p>
+                          <div class="mt-1">${statusPill(pState, pTone)}</div>
+                          <p class="mt-1 text-[11px] text-slate-500">Fee: ${escapeHtml(money(item.amount))} · ${item.paidAmount ? `${escapeHtml(money(item.paidAmount))} paid` : "₹0 paid"}${reserved ? ` · ${escapeHtml(money(reserved))} pending` : ""}</p>
+                        </td>
+                        <td class="px-3 py-3 text-xs text-slate-600">${escapeHtml(shortDate(`${item.dueDate}T12:00:00`))}</td>
+                        <td class="px-3 py-3 font-semibold tabular-nums">${escapeHtml(money(rem))}</td>
+                        <td class="px-3 py-3">
+                          <input
+                            type="number"
+                            min="0"
+                            max="${rem}"
+                            step="1"
+                            placeholder="${rem > 0 ? rem : 0}"
+                            data-inst-input="${escapeHtml(item.installmentId)}"
+                            data-inst-max="${rem}"
+                            ${!writable || rem <= 0 ? "disabled" : ""}
+                            value="${rawVal !== undefined && rawVal !== 0 ? escapeHtml(String(rawVal)) : ""}"
+                            class="w-32 rounded-lg border ${amt > rem ? "border-rose-500 bg-rose-50" : "border-slate-200"} px-2.5 py-2 text-sm tabular-nums outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-slate-50"
+                          />
+                        </td>
+                        ${writable ? `
+                          <td class="px-3 py-3 text-right">
+                            <div class="flex justify-end gap-1">
+                              <button type="button" data-edit-inst="${escapeHtml(item.installmentId)}" title="Edit installment" class="rounded border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Edit</button>
+                              ${canDeleteInst ? `<button type="button" data-del-inst="${escapeHtml(item.installmentId)}" title="Delete unpaid installment" class="rounded border border-rose-200 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">Del</button>` : ""}
+                            </div>
+                          </td>
+                        ` : ""}
+                      </tr>
+                    `;
+                  }).join("")}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="space-y-5">
+            <form id="form-record-payment" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 class="font-bold">Payment details</h2>
+              <p class="mt-1 text-xs text-slate-500">Type any multi-digit late fee or partial installment amount smoothly. Excess tender is prevented.</p>
+              <div class="mt-4 space-y-3">
+                <div>
+                  <label for="pay-method" class="mb-1.5 block text-xs font-semibold">Offline method</label>
+                  <select id="pay-method" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm">
+                    <option value="cash" ${state.collectMethod === "cash" ? "selected" : ""}>Cash at school</option>
+                    <option value="bank_transfer" ${state.collectMethod === "bank_transfer" ? "selected" : ""}>Bank transfer (manual)</option>
+                    <option value="upi_manual" ${state.collectMethod === "upi_manual" ? "selected" : ""}>UPI transfer (manual)</option>
+                    <option value="cheque" ${state.collectMethod === "cheque" ? "selected" : ""}>Cheque (manual)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="pay-reference" class="mb-1.5 block text-xs font-semibold">Reference / transaction note (UTR / Cheque / Slip No.)</label>
+                  <input id="pay-reference" maxlength="120" value="${escapeHtml(state.collectReference)}" placeholder="e.g. UTR412598741256 or Cheque #00421" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm" />
+                </div>
+                <div>
+                  <label for="pay-latefee" class="mb-1.5 block text-xs font-semibold">Late fee (₹)</label>
+                  <input id="pay-latefee" type="number" min="0" max="100000" step="1" placeholder="0" value="${state.collectLateFee === 0 || state.collectLateFee === "" ? "" : escapeHtml(String(state.collectLateFee))}" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm tabular-nums outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100" />
+                  <p id="collect-latefee-alert" role="alert" class="mt-1 hidden text-xs font-semibold text-rose-700">Enter a late fee between ₹0 and ₹1,00,000.</p>
+                </div>
+                <div>
+                  <label for="pay-note" class="mb-1.5 block text-xs font-semibold">Internal note (optional)</label>
+                  <textarea id="pay-note" rows="2" maxlength="500" class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm">${escapeHtml(state.collectNote)}</textarea>
+                </div>
+                ${confirmable ? `
+                  <label class="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs font-semibold text-emerald-950 cursor-pointer">
+                    <input id="pay-autoconfirm" type="checkbox" ${state.collectAutoConfirm ? "checked" : ""} class="h-4 w-4 rounded accent-emerald-700" />
+                    <span>Confirm immediately & generate printable receipt now</span>
+                  </label>
+                ` : ""}
+              </div>
+
+              <div class="mt-4 space-y-1.5 border-t border-slate-100 pt-4 text-xs text-slate-600">
+                <div class="flex justify-between">
+                  <span>Allocated installments</span>
+                  <strong id="collect-principal-display" class="tabular-nums">₹0</strong>
+                </div>
+                <div class="flex justify-between">
+                  <span>Late fee</span>
+                  <strong id="collect-latefee-display" class="tabular-nums">₹0</strong>
+                </div>
+                <div class="flex items-center justify-between pt-1 text-slate-950">
+                  <span class="text-sm font-bold">Total payment amount</span>
+                  <strong id="collect-total-display" class="text-xl font-extrabold tabular-nums">₹0</strong>
+                </div>
+              </div>
+
+              <p id="collect-excess-alert" role="alert" class="mt-2 hidden text-xs font-semibold text-rose-700">One or more allocations exceed the unreserved installment balance.</p>
+
+              <button id="collect-submit-btn" type="submit" class="mt-4 w-full rounded-xl bg-indigo-700 px-4 py-3 text-sm font-bold text-white hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50">
+                ${confirmable && state.collectAutoConfirm ? "Confirm & Print Receipt" : "Save pending entry"}
+              </button>
+              ${!writable ? `<p class="mt-2 text-xs text-rose-700">Your current role or locked school status does not permit recording payments.</p>` : ""}
+            </form>
+
+            <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <h2 class="font-bold">Pending manual entries (${pendingPayments.length})</h2>
+              <div class="mt-3 space-y-3">
+                ${pendingPayments.map(p => {
+                  const allocCount = state.allocations.filter(a => a.paymentId === p.paymentId).length;
+                  return `
+                    <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-3">
+                      <div class="flex justify-between gap-2">
+                        <div>
+                          <p class="text-sm font-bold text-slate-900">${escapeHtml(p.scholarName)}</p>
+                          <p class="mt-1 text-xs text-slate-600">${escapeHtml(p.method.replace(/_/g, " "))} · ${escapeHtml(shortDate(p.createdAt))}${p.reference ? ` · Ref: ${escapeHtml(p.reference)}` : ""}</p>
+                        </div>
+                        <strong class="text-sm tabular-nums">${escapeHtml(money(p.amount))}</strong>
+                      </div>
+                      <p class="mt-2 text-xs text-slate-600">${allocCount} allocation${allocCount === 1 ? "" : "s"} · recorded by ${escapeHtml(p.recordedByName || "school staff")}</p>
+                      ${p.note ? `<p class="mt-1 text-xs text-slate-500">Note: ${escapeHtml(p.note)}</p>` : ""}
+                      ${confirmable ? `
+                        <div class="mt-3 flex gap-2">
+                          <button type="button" data-confirm-pay="${escapeHtml(p.paymentId)}" class="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-800">✓ Confirm received</button>
+                          <button type="button" data-void-pay="${escapeHtml(p.paymentId)}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel entry</button>
+                        </div>
+                      ` : `<p class="mt-2 text-[11px] font-medium text-amber-900">Requires School Admin or Owner to confirm.</p>`}
+                    </div>
+                  `;
+                }).join("") || `<p class="rounded-xl bg-slate-50 p-4 text-xs text-slate-500">No pending manual entries.</p>`}
+              </div>
+            </section>
+          </div>
+        </div>
+      `;
+
+      // Function to update totals in-place without re-rendering DOM!
+      function syncCollectTotalsInPlace() {
+        let allocSum = 0;
+        let hasExcess = false;
+        scholarInstallments.forEach(item => {
+          const rem = getAvailable(item);
+          const raw = state.collectSelected[item.installmentId];
+          const val = raw === undefined || raw === "" ? 0 : Number(raw);
+          if (Number.isFinite(val) && val > 0) {
+            allocSum += Math.round(val);
+            if (val > rem) hasExcess = true;
+          }
+        });
+
+        const rawLate = state.collectLateFee;
+        const lateVal = rawLate === "" || rawLate === undefined ? 0 : Number(rawLate);
+        const invalidLate = !Number.isFinite(lateVal) || lateVal < 0 || lateVal > 100000;
+        const safeLate = invalidLate ? 0 : Math.round(lateVal);
+        const grandTotal = allocSum + safeLate;
+
+        const pEl = document.getElementById("collect-principal-display");
+        const lEl = document.getElementById("collect-latefee-display");
+        const tEl = document.getElementById("collect-total-display");
+        const exAlert = document.getElementById("collect-excess-alert");
+        const lfAlert = document.getElementById("collect-latefee-alert");
+        const subBtn = document.getElementById("collect-submit-btn");
+
+        if (pEl) pEl.textContent = money(allocSum);
+        if (lEl) lEl.textContent = money(safeLate);
+        if (tEl) tEl.textContent = money(grandTotal);
+        if (exAlert) exAlert.classList.toggle("hidden", !hasExcess);
+        if (lfAlert) lfAlert.classList.toggle("hidden", !invalidLate);
+        if (subBtn) {
+          subBtn.disabled = !writable || allocSum <= 0 || hasExcess || invalidLate;
+          subBtn.textContent = confirmable && state.collectAutoConfirm ? "Confirm & Print Receipt" : "Save pending entry";
+        }
+      }
+
+      syncCollectTotalsInPlace();
+
+      document.getElementById("collect-scholar-select").addEventListener("change", e => {
+        state.collectScholarId = e.target.value;
+        state.collectSelected = {};
+        renderApp();
+      });
+
+      const selectOverdueBtn = document.getElementById("btn-select-all-due");
+      if (selectOverdueBtn) {
+        selectOverdueBtn.addEventListener("click", () => {
+          scholarInstallments.forEach(item => {
+            const rem = getAvailable(item);
+            if (rem > 0 && item.dueDate < todayIst) {
+              state.collectSelected[item.installmentId] = rem;
+            }
+          });
+          renderApp();
+        });
+      }
+
+      const clearBtn = document.getElementById("btn-clear-selection");
+      if (clearBtn) {
+        clearBtn.addEventListener("click", () => {
+          state.collectSelected = {};
+          renderApp();
+        });
+      }
+
+      const addInstBtn = document.getElementById("btn-add-installment");
+      if (addInstBtn) {
+        addInstBtn.addEventListener("click", () => openInstallmentModal(null));
+      }
+
+      container.querySelectorAll("button[data-edit-inst]").forEach(btn => {
+        btn.addEventListener("click", () => openInstallmentModal(btn.getAttribute("data-edit-inst")));
+      });
+
+      container.querySelectorAll("button[data-del-inst]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const instId = btn.getAttribute("data-del-inst");
+          const inst = state.installments.find(i => i.installmentId === instId);
+          if (!inst) return;
+          openActionModal({
+            title: `Delete installment (${inst.label})`,
+            description: `Remove ${inst.label} (${money(inst.amount)}) from ${activeScholar.fullName}'s fee schedule? The scholar's annual net fee will be updated automatically.`,
+            confirmLabel: "Delete installment",
+            confirmTone: "rose",
+            requireReason: false,
+            onConfirm: () => {
+              state.installments = state.installments.filter(i => i.installmentId !== instId);
+              delete state.collectSelected[instId];
+              syncScholarNetAnnual(activeScholar.scholarId);
+              logAudit(school.schoolId, "installment.deleted", "installment", instId, { label: inst.label, amount: inst.amount });
+              saveState();
+              renderApp();
+              showToast(`Deleted installment ${inst.label}.`);
+            }
+          });
+        });
+      });
+
+      // Checkbox toggles input value in-place without re-rendering DOM!
+      container.querySelectorAll("input[data-inst-check]").forEach(chk => {
+        chk.addEventListener("change", () => {
+          const id = chk.getAttribute("data-inst-check");
+          const rem = Number(chk.getAttribute("data-inst-rem")) || 0;
+          const inp = container.querySelector(`input[data-inst-input="${id}"]`);
+          if (chk.checked) {
+            state.collectSelected[id] = rem;
+            if (inp) {
+              inp.value = String(rem);
+              inp.classList.remove("border-rose-500", "bg-rose-50");
+              inp.classList.add("border-slate-200");
+            }
+          } else {
+            delete state.collectSelected[id];
+            if (inp) {
+              inp.value = "";
+              inp.classList.remove("border-rose-500", "bg-rose-50");
+              inp.classList.add("border-slate-200");
+            }
+          }
+          syncCollectTotalsInPlace();
+        });
+      });
+
+      // Typing in allocation input updates state and checkbox in-place (NO renderApp()!)
+      container.querySelectorAll("input[data-inst-input]").forEach(inp => {
+        inp.addEventListener("input", () => {
+          const id = inp.getAttribute("data-inst-input");
+          const maxRem = Number(inp.getAttribute("data-inst-max")) || 0;
+          const chk = container.querySelector(`input[data-inst-check="${id}"]`);
+          const raw = inp.value.trim();
+          const num = raw === "" ? 0 : Number(raw);
+          if (raw !== "" && Number.isFinite(num) && num > 0) {
+            state.collectSelected[id] = Math.round(num);
+            if (chk) chk.checked = true;
+            if (num > maxRem) {
+              inp.classList.add("border-rose-500", "bg-rose-50");
+              inp.classList.remove("border-slate-200");
+            } else {
+              inp.classList.remove("border-rose-500", "bg-rose-50");
+              inp.classList.add("border-slate-200");
+            }
+          } else {
+            delete state.collectSelected[id];
+            if (chk) chk.checked = false;
+            inp.classList.remove("border-rose-500", "bg-rose-50");
+            inp.classList.add("border-slate-200");
+          }
+          syncCollectTotalsInPlace();
+        });
+      });
+
+      document.getElementById("pay-method").addEventListener("change", e => {
+        state.collectMethod = e.target.value;
+      });
+      document.getElementById("pay-reference").addEventListener("input", e => {
+        state.collectReference = e.target.value;
+      });
+      // Typing in Late Fee updates totals in-place (NO renderApp()! Fixes single-digit cut-off bug!)
+      document.getElementById("pay-latefee").addEventListener("input", e => {
+        state.collectLateFee = e.target.value;
+        syncCollectTotalsInPlace();
+      });
+      document.getElementById("pay-note").addEventListener("input", e => {
+        state.collectNote = e.target.value;
+      });
+      const autoConfirmChk = document.getElementById("pay-autoconfirm");
+      if (autoConfirmChk) {
+        autoConfirmChk.addEventListener("change", e => {
+          state.collectAutoConfirm = e.target.checked;
+          syncCollectTotalsInPlace();
+        });
+      }
+
+      document.getElementById("form-record-payment").addEventListener("submit", e => {
+        e.preventDefault();
+        if (!writable) return;
+        const entries = Object.entries(state.collectSelected)
+          .map(([instId, amt]) => [instId, Math.round(Number(amt) || 0)])
+          .filter(([, amt]) => amt > 0);
+        if (!entries.length) return;
+
+        for (const [instId, amt] of entries) {
+          const inst = scholarInstallments.find(i => i.installmentId === instId);
+          if (!inst || amt > getAvailable(inst)) {
+            showToast("One or more allocations exceed the unreserved balance.", "error");
+            return;
+          }
+        }
+
+        const lateFeeNum = Math.round(Number(state.collectLateFee) || 0);
+        if (lateFeeNum < 0 || lateFeeNum > 100000) {
+          showToast("Enter a late fee between ₹0 and ₹1,00,000.", "error");
+          return;
+        }
+
+        const allocSum = entries.reduce((acc, [, amt]) => acc + amt, 0);
+        const totalAmt = allocSum + lateFeeNum;
+        const paymentId = makeId("PAY");
+        const nowIso = new Date().toISOString();
+        const shouldConfirmNow = Boolean(confirmable && state.collectAutoConfirm);
+
+        const newPayment = {
+          paymentId,
+          schoolId: school.schoolId,
+          scholarId: activeScholar.scholarId,
+          scholarName: activeScholar.fullName,
+          studentCode: activeScholar.studentCode,
+          amount: totalAmt,
+          lateFee: lateFeeNum,
+          method: state.collectMethod,
+          reference: state.collectReference.trim() || null,
+          note: state.collectNote.trim() || null,
+          status: shouldConfirmNow ? "manual_confirmed" : "pending_manual",
+          recordedByName: state.currentRole === "collector" ? "Kashif Raza" : "Aquib Jawed",
+          createdAt: nowIso,
+          confirmedAt: shouldConfirmNow ? nowIso : null
+        };
+
+        state.payments.unshift(newPayment);
+        entries.forEach(([instId, amt]) => {
+          state.allocations.push({
+            id: Date.now() + Math.floor(Math.random() * 100000),
+            paymentId,
+            installmentId: instId,
+            amount: amt
+          });
+          if (shouldConfirmNow) {
+            const inst = state.installments.find(i => i.installmentId === instId);
+            if (inst) inst.paidAmount += amt;
+          }
+        });
+
+        let generatedReceiptId = null;
+        if (shouldConfirmNow) {
+          const prefix = school.receiptDesign?.prefix || "SP-";
+          const dateStamp = todayIsoIst().replace(/-/g, "");
+          generatedReceiptId = `${prefix}${dateStamp}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+          state.receipts.unshift({
+            receiptId: generatedReceiptId,
+            paymentId,
+            schoolId: school.schoolId,
+            scholarId: activeScholar.scholarId,
+            receiptDate: nowIso
+          });
+          logAudit(school.schoolId, "payment.manual_confirmed", "payment", paymentId, {
+            receiptId: generatedReceiptId,
+            total: totalAmt,
+            lateFee: lateFeeNum,
+            reference: newPayment.reference
+          });
+        } else {
+          logAudit(school.schoolId, "payment.manual_pending", "payment", paymentId, {
+            amount: totalAmt,
+            lateFee: lateFeeNum,
+            method: state.collectMethod,
+            reference: newPayment.reference
+          });
+        }
+
+        state.collectSelected = {};
+        state.collectLateFee = 0;
+        state.collectReference = "";
+        state.collectNote = "";
+        saveState();
+        renderApp();
+
+        if (shouldConfirmNow && generatedReceiptId) {
+          showToast(`Payment confirmed (${money(totalAmt)}). Opening receipt ${generatedReceiptId}…`);
+          openReceiptModal(generatedReceiptId);
+        } else {
+          showToast(`Manual entry saved as pending review (${money(totalAmt)}).`);
+        }
+      });
+
+      container.querySelectorAll("button[data-confirm-pay]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const payId = btn.getAttribute("data-confirm-pay");
+          const payment = state.payments.find(p => p.paymentId === payId);
+          if (!payment) return;
+          openActionModal({
+            title: "Confirm offline manual collection",
+            description: `Confirm that ${money(payment.amount)} for ${payment.scholarName} was received offline? This updates installment balances and issues an official receipt.`,
+            confirmLabel: "Confirm & issue receipt",
+            confirmTone: "emerald",
+            requireReason: false,
+            onConfirm: () => {
+              const allocs = state.allocations.filter(a => a.paymentId === payId);
+              for (const a of allocs) {
+                const inst = state.installments.find(i => i.installmentId === a.installmentId);
+                if (!inst || inst.paidAmount + a.amount > inst.amount) {
+                  showToast("Installment balance changed; cannot confirm over-allocation.", "error");
+                  return;
+                }
+              }
+              allocs.forEach(a => {
+                const inst = state.installments.find(i => i.installmentId === a.installmentId);
+                if (inst) inst.paidAmount += a.amount;
+              });
+              const nowIso = new Date().toISOString();
+              payment.status = "manual_confirmed";
+              payment.confirmedAt = nowIso;
+              const prefix = school.receiptDesign?.prefix || "SP-";
+              const dateStamp = todayIsoIst().replace(/-/g, "");
+              const receiptId = `${prefix}${dateStamp}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+              state.receipts.unshift({
+                receiptId,
+                paymentId: payId,
+                schoolId: school.schoolId,
+                scholarId: payment.scholarId,
+                receiptDate: nowIso
+              });
+              logAudit(school.schoolId, "payment.manual_confirmed", "payment", payId, { receiptId, total: payment.amount, reference: payment.reference });
+              saveState();
+              renderApp();
+              showToast(`Payment confirmed. Receipt ${receiptId} generated.`);
+              openReceiptModal(receiptId);
+            }
+          });
+        });
+      });
+
+      container.querySelectorAll("button[data-void-pay]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const payId = btn.getAttribute("data-void-pay");
+          const payment = state.payments.find(p => p.paymentId === payId);
+          if (!payment) return;
+          openActionModal({
+            title: "Cancel pending manual entry",
+            description: `Cancel the pending entry of ${money(payment.amount)} for ${payment.scholarName}? The reserved balance will be released.`,
+            confirmLabel: "Cancel pending entry",
+            confirmTone: "rose",
+            requireReason: true,
+            reasonLabel: "Reason for cancellation (minimum 5 characters) *",
+            onConfirm: reason => {
+              payment.status = "voided";
+              logAudit(school.schoolId, "payment.voided", "payment", payId, { reason });
+              saveState();
+              renderApp();
+              showToast("Pending manual entry cancelled and audited.");
+            }
+          });
+        });
+      });
+    }
+
+    function renderReceiptRowsHtml(rows) {
+      if (!rows.length) {
+        return `<tr><td colspan="6" class="p-8 text-center text-sm text-slate-500">No matching receipts found.</td></tr>`;
+      }
+      return rows.map(item => `
+        <tr class="hover:bg-slate-50/60">
+          <td class="px-5 py-4 font-mono text-xs font-bold text-indigo-800">${escapeHtml(item.receiptId)}</td>
+          <td class="px-4 py-4">
+            <p class="font-semibold text-slate-900">${escapeHtml(item.scholarName)}</p>
+            <p class="text-xs text-slate-500">${escapeHtml(item.studentCode)}</p>
+          </td>
+          <td class="px-4 py-4 text-xs text-slate-600">${escapeHtml(longDate(item.receiptDate))}</td>
+          <td class="px-4 py-4">
+            <p class="text-xs capitalize text-slate-800">${escapeHtml(item.method.replace(/_/g, " "))}${item.reference ? ` · <span class="font-mono font-semibold text-indigo-900">Ref: ${escapeHtml(item.reference)}</span>` : ""}</p>
+            ${statusPill("Manual · staff confirmed", "green")}
+          </td>
+          <td class="px-4 py-4 text-right font-bold tabular-nums">${escapeHtml(money(item.amount))}</td>
+          <td class="px-5 py-4 text-right">
+            <button type="button" data-view-receipt="${escapeHtml(item.receiptId)}" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold hover:bg-slate-50">View / print</button>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    function bindReceiptTableButtons(container) {
+      container.querySelectorAll("button[data-view-receipt]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          openReceiptModal(btn.getAttribute("data-view-receipt"));
+        });
+      });
+    }
+
+    function renderReceipts(container, school) {
+      const getAllSchoolReceipts = () => state.receipts
+        .filter(r => r.schoolId === school.schoolId)
+        .map(r => {
+          const p = state.payments.find(pay => pay.paymentId === r.paymentId);
+          const s = state.scholars.find(sch => sch.scholarId === r.scholarId);
+          return {
+            receiptId: r.receiptId,
+            receiptDate: r.receiptDate,
+            paymentId: r.paymentId,
+            scholarName: s ? s.fullName : (p ? p.scholarName : "Scholar"),
+            studentCode: s ? s.studentCode : (p ? p.studentCode : ""),
+            amount: p ? p.amount : 0,
+            lateFee: p ? p.lateFee : 0,
+            method: p ? p.method : "cash",
+            reference: p ? p.reference : null,
+            status: p ? p.status : "manual_confirmed"
+          };
+        });
+
+      const allRows = getAllSchoolReceipts();
+      const q = (state.receiptSearch || "").toLowerCase();
+      const rows = allRows.filter(item => `${item.receiptId} ${item.scholarName} ${item.studentCode} ${item.reference || ""}`.toLowerCase().includes(q));
+
+      container.innerHTML = `
+        <div class="mb-7 flex flex-col justify-between gap-4 border-b border-slate-200 pb-6 sm:flex-row sm:items-end">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[.16em] text-indigo-700">Financial records</p>
+            <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Receipt ledger</h1>
+            <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Official school receipts formatted in Times New Roman with school logo, installment balances, and Indian Rupees in words.</p>
+          </div>
+          <button id="btn-export-csv" type="button" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold hover:bg-slate-50">↓ Export CSV (<span id="receipt-export-count">${rows.length}</span>)</button>
+        </div>
+
+        <div class="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+          <p id="receipt-count-label" class="text-xs text-slate-500">Showing <strong>${rows.length}</strong> receipt${rows.length === 1 ? "" : "s"}</p>
+          <div class="w-full sm:max-w-xs">
+            <label class="sr-only" for="input-receipt-search">Search receipt ledger</label>
+            <input id="input-receipt-search" value="${escapeHtml(state.receiptSearch)}" placeholder="Receipt, scholar, code, UTR…" class="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm" />
+          </div>
+        </div>
+
+        <section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[740px] text-left text-sm">
+              <thead class="bg-slate-50 text-[11px] uppercase text-slate-500">
+                <tr>
+                  <th class="px-5 py-3">Receipt</th>
+                  <th class="px-4 py-3">Scholar</th>
+                  <th class="px-4 py-3">Date</th>
+                  <th class="px-4 py-3">Method / reference</th>
+                  <th class="px-4 py-3 text-right">Amount</th>
+                  <th class="px-5 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="receipt-table-body" class="divide-y divide-slate-100">
+                ${renderReceiptRowsHtml(rows)}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      `;
+
+      // In-place search without replacing the search input DOM node!
+      document.getElementById("input-receipt-search").addEventListener("input", e => {
+        state.receiptSearch = e.target.value;
+        const nextQ = state.receiptSearch.toLowerCase();
+        const nextRows = allRows.filter(item => `${item.receiptId} ${item.scholarName} ${item.studentCode} ${item.reference || ""}`.toLowerCase().includes(nextQ));
+        const tbody = document.getElementById("receipt-table-body");
+        const countLabel = document.getElementById("receipt-count-label");
+        const expCount = document.getElementById("receipt-export-count");
+        if (tbody) {
+          tbody.innerHTML = renderReceiptRowsHtml(nextRows);
+          bindReceiptTableButtons(tbody);
+        }
+        if (countLabel) countLabel.innerHTML = `Showing <strong>${nextRows.length}</strong> receipt${nextRows.length === 1 ? "" : "s"}`;
+        if (expCount) expCount.textContent = String(nextRows.length);
+      });
+
+      document.getElementById("btn-export-csv").addEventListener("click", () => {
+        const nextQ = (state.receiptSearch || "").toLowerCase();
+        const exportSource = allRows.filter(item => `${item.receiptId} ${item.scholarName} ${item.studentCode} ${item.reference || ""}`.toLowerCase().includes(nextQ));
+        const header = ["Receipt", "Date", "Scholar", "Student code", "Amount (INR)", "Late fee (INR)", "Method", "Reference", "Status"];
+        const csvRows = exportSource.map(item => [
+          item.receiptId,
+          longDate(item.receiptDate),
+          item.scholarName,
+          item.studentCode,
+          item.amount,
+          item.lateFee,
+          item.method,
+          item.reference || "",
+          item.status
+        ].map(csvCell));
+        const content = [header.map(csvCell).join(","), ...csvRows.map(r => r.join(","))].join("\r\n");
+        const blob = new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `scholarpay-receipts-${school.schoolId}.csv`;
+        a.click();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showToast(`Exported ${exportSource.length} receipt${exportSource.length === 1 ? "" : "s"} to CSV.`);
+      });
+
+      bindReceiptTableButtons(container);
+    }
+
+    // =========================================================================
+    // Receipt Designer with School Logo Upload, Times New Roman & Live Preview
+    // =========================================================================
+    function renderReceiptDesign(container, school) {
+      const editable = isSchoolAdmin() && school.status !== "locked";
+      const design = {
+        title: school.name.toUpperCase(),
+        tagline: "Where Education Meets Excellence",
+        address: school.phone,
+        prefix: "BIS-",
+        signatory: school.principal,
+        footer: "Keep this receipt for your records.",
+        accent: "indigo",
+        fontFamily: "times",
+        logoUrl: DEFAULT_BLESS_LOGO,
+        logoSize: "72",
+        showWatermark: true,
+        ...(school.receiptDesign || {})
+      };
+
+      let currentLogoDataUrl = design.logoUrl || "";
+
+      container.innerHTML = `
+        <div class="mb-7 border-b border-slate-200 pb-6">
+          <p class="text-xs font-bold uppercase tracking-[.16em] text-indigo-700">School identity & print branding</p>
+          <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Receipt settings & logo designer</h1>
+          <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Upload your school logo, customize your Times New Roman header, tagline, and address, and preview the exact printable receipt layout in real time.</p>
+        </div>
+
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(420px,1.05fr)]">
+          <form id="form-receipt-design" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+            <!-- School Logo Upload Box -->
+            <div class="mb-5 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                  <div id="rd-logo-thumb-wrap" class="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+                    ${currentLogoDataUrl
+                      ? `<img id="rd-logo-thumb" src="${escapeHtml(currentLogoDataUrl)}" alt="School Logo" class="h-full w-full object-contain" />`
+                      : `<span class="text-[11px] font-bold text-slate-400">No Logo</span>`}
+                  </div>
+                  <div>
+                    <p class="text-sm font-bold text-slate-900">School Logo on Printed Receipt</p>
+                    <p class="mt-0.5 text-xs text-slate-600">Upload PNG, JPG, or SVG. Embedded directly so it always prints crisply.</p>
+                  </div>
+                </div>
+                ${editable ? `
+                  <div class="flex flex-wrap gap-2">
+                    <label for="rd-logo-file" class="cursor-pointer rounded-xl bg-indigo-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-indigo-800">
+                      Upload Logo Image
+                    </label>
+                    <input id="rd-logo-file" type="file" accept="image/*" class="hidden" />
+                    <button id="btn-restore-crest" type="button" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Default Crest</button>
+                    <button id="btn-remove-logo" type="button" class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">Remove</button>
+                  </div>
+                ` : ""}
+              </div>
+
+              <div class="mt-3 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <label for="rd-logo-size" class="mb-1 block text-xs font-semibold text-slate-700">Logo print size</label>
+                  <select id="rd-logo-size" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold">
+                    <option value="56" ${String(design.logoSize) === "56" ? "selected" : ""}>Compact (56px)</option>
+                    <option value="72" ${String(design.logoSize) === "72" ? "selected" : ""}>Standard (72px)</option>
+                    <option value="88" ${String(design.logoSize) === "88" ? "selected" : ""}>Large Crest (88px)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="rd-font" class="mb-1 block text-xs font-semibold text-slate-700">Receipt typography</label>
+                  <select id="rd-font" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold">
+                    <option value="times" ${design.fontFamily !== "sans" ? "selected" : ""}>Times New Roman (Formal)</option>
+                    <option value="sans" ${design.fontFamily === "sans" ? "selected" : ""}>Inter Sans-Serif (Modern)</option>
+                  </select>
+                </div>
+                <div class="flex items-end pb-1">
+                  <label class="flex items-center gap-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                    <input id="rd-watermark" type="checkbox" ${design.showWatermark ? "checked" : ""} ${!editable ? "disabled" : ""} class="h-4 w-4 rounded accent-indigo-700" />
+                    <span>Center watermark logo</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label for="rd-title" class="mb-1.5 block text-xs font-semibold text-slate-700">School title *</label>
+                <input id="rd-title" required maxlength="160" value="${escapeHtml(design.title)}" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-100" />
+              </div>
+              <div>
+                <label for="rd-tagline" class="mb-1.5 block text-xs font-semibold text-slate-700">Tagline / motto</label>
+                <input id="rd-tagline" maxlength="240" value="${escapeHtml(design.tagline)}" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-100" />
+              </div>
+              <div class="sm:col-span-2">
+                <label for="rd-address" class="mb-1.5 block text-xs font-semibold text-slate-700">Address & contact line</label>
+                <input id="rd-address" maxlength="300" value="${escapeHtml(design.address)}" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-100" />
+              </div>
+              <div>
+                <label for="rd-prefix" class="mb-1.5 block text-xs font-semibold text-slate-700">Receipt prefix *</label>
+                <input id="rd-prefix" required maxlength="24" value="${escapeHtml(design.prefix)}" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-mono disabled:bg-slate-100" />
+              </div>
+              <div>
+                <label for="rd-signatory" class="mb-1.5 block text-xs font-semibold text-slate-700">Authorized signatory</label>
+                <input id="rd-signatory" maxlength="120" value="${escapeHtml(design.signatory)}" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-100" />
+              </div>
+              <div class="sm:col-span-2">
+                <label for="rd-accent" class="mb-1.5 block text-xs font-semibold text-slate-700">Border & badge accent theme</label>
+                <select id="rd-accent" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm disabled:bg-slate-100">
+                  <option value="indigo" ${design.accent === "indigo" ? "selected" : ""}>Royal Navy & Indigo</option>
+                  <option value="emerald" ${design.accent === "emerald" ? "selected" : ""}>Institutional Emerald</option>
+                  <option value="teal" ${design.accent === "teal" ? "selected" : ""}>Classic Teal</option>
+                  <option value="amber" ${design.accent === "amber" ? "selected" : ""}>Heritage Gold / Amber</option>
+                  <option value="rose" ${design.accent === "rose" ? "selected" : ""}>Crimson / Rose</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-4">
+              <label for="rd-footer" class="mb-1.5 block text-xs font-semibold text-slate-700">Footer note / social handle</label>
+              <textarea id="rd-footer" rows="2" maxlength="500" ${!editable ? "disabled" : ""} class="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm disabled:bg-slate-100">${escapeHtml(design.footer)}</textarea>
+            </div>
+            ${editable ? `<button type="submit" class="mt-5 w-full sm:w-auto rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-800">Save receipt design</button>` : `<p class="mt-4 text-xs text-slate-500">Only a school administrator on an unlocked school can edit receipt settings.</p>`}
+          </form>
+
+          <section class="rounded-2xl border border-slate-200 bg-slate-100 p-4 sm:p-5">
+            <div class="mb-3 flex items-center justify-between">
+              <p class="text-xs font-bold uppercase tracking-wide text-slate-600">Live Formal Print Preview (Times New Roman)</p>
+              <span class="text-[11px] font-medium text-slate-500">Exact Print Layout</span>
+            </div>
+            <div id="live-receipt-preview-container"></div>
+          </section>
+        </div>
+      `;
+
+      function getDraftDesign() {
+        return {
+          title: document.getElementById("rd-title").value.trim() || school.name.toUpperCase(),
+          tagline: document.getElementById("rd-tagline").value.trim(),
+          address: document.getElementById("rd-address").value.trim(),
+          prefix: document.getElementById("rd-prefix").value.trim() || "SP-",
+          signatory: document.getElementById("rd-signatory").value.trim() || "Authorized Signatory",
+          footer: document.getElementById("rd-footer").value.trim(),
+          accent: document.getElementById("rd-accent").value,
+          fontFamily: document.getElementById("rd-font").value,
+          logoUrl: currentLogoDataUrl,
+          logoSize: document.getElementById("rd-logo-size").value,
+          showWatermark: document.getElementById("rd-watermark").checked
+        };
+      }
+
+      function refreshThumbAndPreview() {
+        const thumbWrap = document.getElementById("rd-logo-thumb-wrap");
+        if (thumbWrap) {
+          thumbWrap.innerHTML = currentLogoDataUrl
+            ? `<img src="${escapeHtml(currentLogoDataUrl)}" alt="School Logo" class="h-full w-full object-contain" />`
+            : `<span class="text-[11px] font-bold text-slate-400">No Logo</span>`;
+        }
+        const draft = getDraftDesign();
+        const previewBox = document.getElementById("live-receipt-preview-container");
+        if (previewBox) {
+          previewBox.innerHTML = buildFormalReceiptCopyHtml({
+            copyLabel: "Official Receipt Preview",
+            school,
+            design: draft,
+            receiptId: `${draft.prefix}20261113-PREVIEW`,
+            receiptDate: new Date().toISOString(),
+            scholar: {
+              fullName: "Aarav Sharma",
+              studentCode: "BIS-26-101",
+              grade: "Class 10 · Section A",
+              rollNumber: "14",
+              guardianName: "Rajesh Sharma",
+              phone: "9431088776",
+              academicYear: school.academicYear
+            },
+            payment: {
+              amount: 2700,
+              lateFee: 0,
+              method: "upi_manual",
+              reference: "UTR412598741256",
+              note: "April & May Tuition Fee",
+              recordedByName: "Aquib Jawed"
+            },
+            paymentAllocs: [
+              { label: "April 2026", installmentAmount: 1350, paidAmount: 1350, amount: 1350 },
+              { label: "May 2026", installmentAmount: 1350, paidAmount: 1350, amount: 1350 }
+            ],
+            annualNetFee: 16200,
+            totalPaidTillDate: 2700
+          });
+        }
+      }
+
+      refreshThumbAndPreview();
+
+      ["rd-title", "rd-tagline", "rd-address", "rd-prefix", "rd-signatory", "rd-accent", "rd-footer", "rd-logo-size", "rd-font", "rd-watermark"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener("input", refreshThumbAndPreview);
+          el.addEventListener("change", refreshThumbAndPreview);
+        }
+      });
+
+      const fileInput = document.getElementById("rd-logo-file");
+      if (fileInput) {
+        fileInput.addEventListener("change", e => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = ev => {
+            const rawUrl = String(ev.target?.result || "");
+            // Resize large bitmap images onto a 240x240 canvas so localStorage stays fast
+            const img = new Image();
+            img.onload = () => {
+              try {
+                const maxDim = 240;
+                let w = img.width || 160;
+                let h = img.height || 160;
+                if (w > maxDim || h > maxDim) {
+                  if (w > h) {
+                    h = Math.round((h * maxDim) / w);
+                    w = maxDim;
+                  } else {
+                    w = Math.round((w * maxDim) / h);
+                    h = maxDim;
+                  }
+                }
+                const canvas = document.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                const ctx = canvas.getContext("2d");
+                ctx.drawImage(img, 0, 0, w, h);
+                currentLogoDataUrl = canvas.toDataURL("image/png");
+              } catch (err) {
+                currentLogoDataUrl = rawUrl;
+              }
+              refreshThumbAndPreview();
+              showToast("Logo loaded into preview. Click 'Save receipt design' to persist.");
+            };
+            img.onerror = () => {
+              currentLogoDataUrl = rawUrl;
+              refreshThumbAndPreview();
+            };
+            img.src = rawUrl;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      const restoreBtn = document.getElementById("btn-restore-crest");
+      if (restoreBtn) {
+        restoreBtn.addEventListener("click", () => {
+          const initials = (document.getElementById("rd-title").value || school.name)
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 3)
+            .map(w => w[0].toUpperCase())
+            .join("") || "SP";
+          currentLogoDataUrl = createSchoolCrestDataUrl(initials, "#1e1b4b", "#d97706");
+          refreshThumbAndPreview();
+          showToast("Restored school crest emblem.");
+        });
+      }
+
+      const removeLogoBtn = document.getElementById("btn-remove-logo");
+      if (removeLogoBtn) {
+        removeLogoBtn.addEventListener("click", () => {
+          currentLogoDataUrl = "";
+          refreshThumbAndPreview();
+          showToast("Logo removed from preview.");
+        });
+      }
+
+      document.getElementById("form-receipt-design").addEventListener("submit", e => {
+        e.preventDefault();
+        if (!editable) return;
+        const draft = getDraftDesign();
+        if (!/^[A-Za-z0-9-]+$/.test(draft.prefix)) {
+          showToast("Receipt prefix can only contain letters, numbers, and hyphens.", "error");
+          return;
+        }
+        school.receiptDesign = draft;
+        logAudit(school.schoolId, "receipt_design.updated", "school", school.schoolId, { prefix: draft.prefix, hasLogo: Boolean(draft.logoUrl), fontFamily: draft.fontFamily });
+        saveState();
+        showToast("Receipt design and school logo saved.");
+      });
+    }
+
+    function renderOwnerConsole(container, school) {
+      const schoolMembers = state.members.filter(m => m.schoolId === school.schoolId);
+      const schoolAudits = state.auditEvents.filter(a => a.schoolId === school.schoolId);
+
+      container.innerHTML = `
+        <div class="mb-7 border-b border-slate-200 pb-6">
+          <p class="text-xs font-bold uppercase tracking-[.16em] text-indigo-700">Restricted administration</p>
+          <h1 class="mt-1 text-2xl font-extrabold tracking-tight text-slate-950 sm:text-3xl">Platform owner console</h1>
+          <p class="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Manage school accounts, lock/unlock schools with excessive subscription dues, assign or revoke staff roles, and inspect audit history.</p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-3">
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Schools</p>
+            <p class="mt-3 text-2xl font-extrabold text-slate-950 tabular-nums">${state.schools.length}</p>
+            <p class="mt-2 text-xs text-slate-500">Registered school tenants</p>
+          </article>
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-700">Active</p>
+            <p class="mt-3 text-2xl font-extrabold text-emerald-800 tabular-nums">${state.schools.filter(s => s.status === "active").length}</p>
+            <p class="mt-2 text-xs text-slate-500">Available for fee operations</p>
+          </article>
+          <article class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p class="text-xs font-bold uppercase tracking-wide text-amber-800">Locked</p>
+            <p class="mt-3 text-2xl font-extrabold text-amber-900 tabular-nums">${state.schools.filter(s => s.status === "locked").length}</p>
+            <p class="mt-2 text-xs text-slate-500">Writes blocked server-side</p>
+          </article>
+        </div>
+
+        <!-- Registered Schools List -->
+        <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div class="border-b border-slate-100 px-5 py-4">
+            <h2 class="font-bold">Registered schools</h2>
+            <p class="mt-1 text-xs text-slate-500">Locking a school blocks all writes and displays the owner contact notice.</p>
+          </div>
+          <div class="divide-y divide-slate-100">
+            ${state.schools.map(s => `
+              <div class="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between ${s.schoolId === school.schoolId ? "bg-indigo-50/30" : ""}">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <p class="font-bold text-slate-900">${escapeHtml(s.name)}</p>
+                    ${statusPill(s.status, s.status === "active" ? "green" : "red")}
+                  </div>
+                  <p class="mt-1 text-xs text-slate-500">${escapeHtml(s.schoolId)} · Session ${escapeHtml(s.academicYear)} · Plan: ${escapeHtml(s.planName)} · Subscription due: <strong>${escapeHtml(money(s.subscriptionDue))}</strong></p>
+                  ${s.lockReason ? `<p class="mt-1 text-xs font-medium text-rose-700">Lock notice: ${escapeHtml(s.lockReason)}</p>` : ""}
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" data-select-school="${escapeHtml(s.schoolId)}" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold hover:bg-slate-50">${s.schoolId === school.schoolId ? "Selected" : "Switch to school"}</button>
+                  <button type="button" data-toggle-lock="${escapeHtml(s.schoolId)}" class="rounded-lg px-3 py-2 text-xs font-bold text-white ${s.status === "active" ? "bg-rose-700 hover:bg-rose-800" : "bg-emerald-700 hover:bg-emerald-800"}">${s.status === "active" ? "Lock with reason" : "Unlock school"}</button>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+
+        <!-- Active School Settings & Staff Access -->
+        <div class="mt-6 grid gap-6 xl:grid-cols-2">
+          <form id="form-school-settings" class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 class="font-bold">Update settings for ${escapeHtml(school.name)}</h2>
+            <p class="mt-1 text-xs text-slate-500">Academic year must follow consecutive YYYY-YY format (e.g. 2026-27).</p>
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+              <div>
+                <label for="set-plan" class="mb-1 block text-xs font-semibold">Plan name *</label>
+                <input id="set-plan" required value="${escapeHtml(school.planName)}" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label for="set-year" class="mb-1 block text-xs font-semibold">Academic year *</label>
+                <input id="set-year" required value="${escapeHtml(school.academicYear)}" placeholder="2026-27" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-mono" />
+              </div>
+              <div>
+                <label for="set-due" class="mb-1 block text-xs font-semibold">Subscription due (₹) *</label>
+                <input id="set-due" type="number" min="0" required value="${school.subscriptionDue}" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm tabular-nums" />
+              </div>
+            </div>
+            <div class="mt-3">
+              <label for="set-reason" class="mb-1 block text-xs font-semibold">Reason for change (minimum 5 characters) *</label>
+              <input id="set-reason" required minlength="5" placeholder="e.g. Updated annual SaaS subscription dues" class="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+            </div>
+            <button type="submit" class="mt-4 rounded-xl bg-indigo-700 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-800">Save school settings</button>
+          </form>
+
+          <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 class="font-bold">Staff access for ${escapeHtml(school.name)}</h2>
+            <p class="mt-1 text-xs text-slate-500">Grant or revoke staff permissions for this school.</p>
+            <form id="form-grant-member" class="mt-3 grid gap-2 sm:grid-cols-2">
+              <input id="mem-name" required placeholder="Staff full name *" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+              <input id="mem-email" type="email" required placeholder="Staff email *" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+              <select id="mem-role" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
+                <option value="school_admin">School administrator</option>
+                <option value="collector">Fee collector</option>
+                <option value="viewer">Read-only viewer</option>
+              </select>
+              <input id="mem-reason" required minlength="5" placeholder="Audit reason (5+ chars) *" class="rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+              <button type="submit" class="sm:col-span-2 rounded-xl bg-slate-900 px-4 py-2 text-xs font-bold text-white hover:bg-slate-800">Grant / Update Access</button>
+            </form>
+
+            <div class="mt-4 border-t border-slate-100 pt-3">
+              <h3 class="text-xs font-bold uppercase tracking-wide text-slate-500">Current authorized staff (${schoolMembers.length})</h3>
+              <div class="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
+                ${schoolMembers.map(m => `
+                  <div class="flex items-center justify-between gap-2 px-3 py-2.5 text-xs">
+                    <div>
+                      <p class="font-bold text-slate-900">${escapeHtml(m.name)}</p>
+                      <p class="text-slate-500">${escapeHtml(m.email)}</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      ${statusPill(m.role.replace(/_/g, " "), "blue")}
+                      <button type="button" data-revoke-member="${m.userId}" class="rounded-lg border border-rose-200 px-2.5 py-1 font-semibold text-rose-700 hover:bg-rose-50">Revoke</button>
+                    </div>
+                  </div>
+                `).join("") || `<p class="p-3 text-xs text-slate-500">No staff members assigned.</p>`}
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- Audit Log -->
+        <section class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div class="border-b border-slate-100 px-5 py-4">
+            <h2 class="font-bold">Recent audit activity (${escapeHtml(school.name)})</h2>
+            <p class="mt-1 text-xs text-slate-500">Every administrative change and payment event is immutably logged.</p>
+          </div>
+          <div class="divide-y divide-slate-100">
+            ${schoolAudits.slice(0, 20).map(ev => `
+              <div class="grid gap-1 px-5 py-3 text-xs sm:grid-cols-[180px_220px_minmax(0,1fr)]">
+                <span class="text-slate-500">${escapeHtml(longDate(ev.createdAt))}</span>
+                <span class="font-bold text-slate-800">${escapeHtml(ev.actorName)} · ${escapeHtml(ev.action)}</span>
+                <span class="break-words font-mono text-slate-600">${escapeHtml(ev.entityType)} ${escapeHtml(ev.entityId)} · ${escapeHtml(ev.details)}</span>
+              </div>
+            `).join("") || `<p class="p-5 text-sm text-slate-500">No audit events recorded for this school.</p>`}
+          </div>
+        </section>
+      `;
+
+      container.querySelectorAll("button[data-select-school]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          state.activeSchoolId = btn.getAttribute("data-select-school");
+          saveState();
+          renderApp();
+        });
+      });
+
+      container.querySelectorAll("button[data-toggle-lock]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const targetId = btn.getAttribute("data-toggle-lock");
+          const targetSchool = state.schools.find(s => s.schoolId === targetId);
+          if (!targetSchool) return;
+          const nextStatus = targetSchool.status === "active" ? "locked" : "active";
+          openActionModal({
+            title: `${nextStatus === "locked" ? "Lock" : "Unlock"} ${targetSchool.name}`,
+            description: nextStatus === "locked"
+              ? "Locking this school blocks all writes and displays the lock banner ('Kindly contact to the owner') along with your reason."
+              : "Unlocking this school restores normal fee collection and scholar registration.",
+            confirmLabel: nextStatus === "locked" ? "Lock school" : "Unlock school",
+            confirmTone: nextStatus === "locked" ? "rose" : "emerald",
+            requireReason: true,
+            reasonLabel: `Reason for ${nextStatus === "locked" ? "locking" : "unlocking"} (minimum 5 characters) *`,
+            onConfirm: reason => {
+              targetSchool.status = nextStatus;
+              targetSchool.lockReason = nextStatus === "locked" ? reason : null;
+              logAudit(targetSchool.schoolId, `school.${nextStatus}`, "school", targetSchool.schoolId, { reason });
+              saveState();
+              renderApp();
+              showToast(`${targetSchool.name} is now ${nextStatus}.`);
+            }
+          });
+        });
+      });
+
+      document.getElementById("form-school-settings").addEventListener("submit", e => {
+        e.preventDefault();
+        const planName = document.getElementById("set-plan").value.trim();
+        const academicYear = document.getElementById("set-year").value.trim();
+        const subscriptionDue = Number(document.getElementById("set-due").value || 0);
+        const reason = document.getElementById("set-reason").value.trim();
+        if (!isValidAcademicYear(academicYear)) {
+          showToast("Academic year must be consecutive YYYY-YY (e.g. 2026-27).", "error");
+          return;
+        }
+        if (reason.length < 5) {
+          showToast("Enter a reason of at least 5 characters.", "error");
+          return;
+        }
+        school.planName = planName;
+        school.academicYear = academicYear;
+        school.subscriptionDue = subscriptionDue;
+        logAudit(school.schoolId, "school.settings_updated", "school", school.schoolId, { planName, academicYear, subscriptionDue, reason });
+        saveState();
+        renderApp();
+        showToast("School settings updated and audited.");
+      });
+
+      document.getElementById("form-grant-member").addEventListener("submit", e => {
+        e.preventDefault();
+        const name = document.getElementById("mem-name").value.trim();
+        const email = document.getElementById("mem-email").value.trim().toLowerCase();
+        const role = document.getElementById("mem-role").value;
+        const reason = document.getElementById("mem-reason").value.trim();
+        if (reason.length < 5) {
+          showToast("Enter a reason of at least 5 characters.", "error");
+          return;
+        }
+        const existing = state.members.find(m => m.schoolId === school.schoolId && m.email.toLowerCase() === email);
+        if (existing) {
+          existing.name = name;
+          existing.role = role;
+        } else {
+          state.members.push({
+            userId: Date.now(),
+            schoolId: school.schoolId,
+            name,
+            email,
+            role
+          });
+        }
+        logAudit(school.schoolId, "school.membership_changed", "membership", email, { role, reason });
+        saveState();
+        renderApp();
+        showToast(`Granted ${role.replace(/_/g, " ")} access to ${email}.`);
+      });
+
+      container.querySelectorAll("button[data-revoke-member]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const uid = Number(btn.getAttribute("data-revoke-member"));
+          const member = state.members.find(m => m.userId === uid && m.schoolId === school.schoolId);
+          if (!member) return;
+          openActionModal({
+            title: "Revoke school access",
+            description: `Remove ${member.name} (${member.email}) from ${school.name}?`,
+            confirmLabel: "Revoke access",
+            confirmTone: "rose",
+            requireReason: true,
+            reasonLabel: "Reason for revoking access (minimum 5 characters) *",
+            onConfirm: reason => {
+              state.members = state.members.filter(m => !(m.userId === uid && m.schoolId === school.schoolId));
+              logAudit(school.schoolId, "school.membership_removed", "membership", member.email, { previousRole: member.role, reason });
+              saveState();
+              renderApp();
+              showToast(`Revoked access for ${member.email}.`);
+            }
+          });
+        });
+      });
+    }
+
+    function renderApp() {
+      renderHeaderAndNav();
+      const school = getActiveSchool();
+      const container = document.getElementById("view-container");
+      if (!school) return;
+
+      if (state.activeTab === "overview") renderOverview(container, school);
+      else if (state.activeTab === "scholars") renderScholars(container, school);
+      else if (state.activeTab === "collect") renderCollect(container, school);
+      else if (state.activeTab === "receipts") renderReceipts(container, school);
+      else if (state.activeTab === "receipt-design") renderReceiptDesign(container, school);
+      else if (state.activeTab === "owner") renderOwnerConsole(container, school);
+    }
+
+    // Header Controls
+    document.getElementById("school-selector").addEventListener("change", e => {
+      state.activeSchoolId = e.target.value;
+      state.collectSelected = {};
+      saveState();
+      renderApp();
+    });
+
+    document.getElementById("role-selector").addEventListener("change", e => {
+      state.currentRole = e.target.value;
+      saveState();
+      renderApp();
+      showToast(`Switched active role view to ${e.target.options[e.target.selectedIndex].text.replace("Role: ", "")}.`);
+    });
+
+    document.getElementById("btn-reset-demo").addEventListener("click", () => {
+      openActionModal({
+        title: "Reset ScholarPay workspace data",
+        description: "Restore the default Bless International School sample records, scholars, logo, and receipts?",
+        confirmLabel: "Reset data",
+        confirmTone: "rose",
+        requireReason: false,
+        onConfirm: () => {
+          state = buildInitialState();
+          saveState();
+          renderApp();
+          showToast("Workspace reset to default records.");
+        }
+      });
+    });
+
+    // Initial boot
+    renderApp();
+  </script>
+</body>
+</html>
